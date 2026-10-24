@@ -1,0 +1,111 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --ink: #1f2a24;
+  --muted: #5b6660;
+  --line: #e3e1da;
+  --brand: #2e6a4f;
+  --chill: #3b7ea1;
+  --heat: #c8742b;
+  --good: #2f855a;
+  --watch: #b7791f;
+  --risk: #c53030;
+  /* text-safe variants for small text on light backgrounds (AA 4.5:1) */
+  --watch-ink: #8a5a12;
+  --radius-card: 12px;
+  --radius-ctl: 8px;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-chill: var(--chill);
+  --color-heat: var(--heat);
+  --color-good: var(--good);
+  --color-watch: var(--watch);
+  --color-watch-ink: var(--watch-ink);
+  --color-risk: var(--risk);
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius-card: 12px;
+  --radius-ctl: 8px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+}
+
+:focus-visible {
+  outline: 2px solid var(--chill);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
+
+@keyframes pin-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.pin-pulse {
+  animation: pin-pulse 1.2s ease-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #eeede8 0px, #f6f5f1 80px, #eeede8 160px);
+  background-size: 400px 100%;
+  animation: shimmer 1.2s linear infinite;
+  border-radius: 8px;
+}

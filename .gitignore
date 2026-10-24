@@ -1,0 +1,26 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# engine data (keep demo)
+engine/data/raw/
+engine/data/cache/
+engine/data/processed/
+!engine/data/demo/
+
+# web
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# os
+.DS_Store
+Thumbs.db
