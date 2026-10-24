@@ -24,3 +24,6 @@ next-env.d.ts
 # os
 .DS_Store
 Thumbs.db
+
+# logs
+engine/data/logs/
