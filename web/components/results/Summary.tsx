@@ -1,12 +1,12 @@
 "use client";
 
-import { CalendarClock, Percent, Snowflake } from "lucide-react";
+import { CalendarClock, Percent, Snowflake, Thermometer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useData } from "@/lib/data";
 import { EXPLAIN, plainVerdict } from "@/lib/explain";
 import { inTen, longDate, shortDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
-import type { PointResponse } from "@/lib/types";
+import type { OrchardInfo, OrchardResponse, PointResponse } from "@/lib/types";
 import { InfoTip, LEVEL, Skeleton, StatusPill } from "../ui";
 
 function Row({ icon, label, info, children }: { icon: ReactNode; label: string; info: string; children: ReactNode }) {
@@ -21,6 +21,31 @@ function Row({ icon, label, info, children }: { icon: ReactNode; label: string; 
           <InfoTip label={label}>{info}</InfoTip>
         </div>
         <div className="text-[14px] leading-snug text-ink">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function OrchardNote({ o, cp, season }: { o: OrchardInfo; cp: number; season: string }) {
+  const diff = o.difference_cp;
+  return (
+    <div className="mt-2 flex gap-2 rounded-[8px] bg-bg p-2.5 text-[12px] leading-relaxed">
+      <Thermometer size={16} aria-hidden className="mt-0.5 shrink-0 text-chill" />
+      <div>
+        <span className="font-semibold">Counted from your orchard&apos;s readings</span> ({o.kind === "daily" ? `${o.days} days of lows and highs` : "logger readings"},{" "}
+        {longDate(o.first)} to {longDate(o.last)}, the {season} winter).
+        {o.station_estimate_cp !== null && diff !== null && (
+          <>
+            {" "}
+            The station-only estimate for the same days was <span className="num">{o.station_estimate_cp.toFixed(0)}</span> chill portions; your readings give{" "}
+            <span className="num">{cp.toFixed(0)}</span>
+            {Math.abs(diff) >= 0.5 ? ` (${diff > 0 ? "+" : ""}${diff.toFixed(1)})` : " (about the same)"}.
+          </>
+        )}
+        {o.before_start_from_station && " Days before your readings start use the station estimate."}
+        {o.gap_filled > 0 && ` ${o.gap_filled} missing ${o.gap_unit} were filled in from the days around them.`}
+        {o.gap_estimated > 0 && ` ${o.gap_estimated} ${o.gap_unit} in longer gaps use the station estimate.`}
+        {o.error_source !== "not validated" && ` The give-or-take comes from the ${o.error_source}.`}
       </div>
     </div>
   );
@@ -41,7 +66,10 @@ export default function Summary({ p }: { p: PointResponse }) {
   const by = shortDate(p.need.by);
   const pct = Math.min(100, (p.chill.to_date / (high * 1.15)) * 100);
   const L = LEVEL[p.verdict.level];
-  const station = p.method.replace(/^E4 from /, "").replace(/ \(.*\)$/, "");
+  const orchard = (p as OrchardResponse).orchard;
+  // A winter already past its need date: the count is final, so there are no odds to show.
+  const finished = p.asof >= p.need.by;
+  const station = orchard ? "your orchard's readings" : p.method.replace(/^E4 from /, "").replace(/ \(.*\)$/, "");
 
   return (
     <div className="rounded-[12px] border border-line bg-surface p-4" data-coach="verdict">
@@ -65,11 +93,18 @@ export default function Summary({ p }: { p: PointResponse }) {
             <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pct}%`, background: L.color }} />
           </div>
         </Row>
-        <Row icon={<CalendarClock size={18} />} label={`Expected by ${by}`} info={EXPLAIN.odds}>
-          Most likely about <span className="num font-semibold">{p.outlook.p50.toFixed(0)}</span> chill portions, probably between{" "}
-          <span className="num">{p.outlook.p10.toFixed(0)}</span> and <span className="num">{p.outlook.p90.toFixed(0)}</span>.
-        </Row>
-        <Row icon={<Percent size={18} />} label="Chance of enough chill" info={EXPLAIN.odds}>
+        {finished ? (
+          <Row icon={<CalendarClock size={18} />} label={`By ${by}`} info={EXPLAIN.odds}>
+            This winter reached <span className="num font-semibold">{p.outlook.p50.toFixed(0)}</span> chill portions by {by}
+            {p.outlook.p50 >= high ? ", the full need." : p.outlook.p50 >= low ? `, inside the ${needText(low, high)} range.` : `, short of the ${low} needed.`}
+          </Row>
+        ) : (
+          <Row icon={<CalendarClock size={18} />} label={`Expected by ${by}`} info={EXPLAIN.odds}>
+            Most likely about <span className="num font-semibold">{p.outlook.p50.toFixed(0)}</span> chill portions, probably between{" "}
+            <span className="num">{p.outlook.p10.toFixed(0)}</span> and <span className="num">{p.outlook.p90.toFixed(0)}</span>.
+          </Row>
+        )}
+        {!finished && <Row icon={<Percent size={18} />} label="Chance of enough chill" info={EXPLAIN.odds}>
           In <span className="num font-semibold">{inTen(p.outlook.chance_low)}</span> past winters your trees would reach {low} by {by}
           {high > low && (
             <>
@@ -77,8 +112,10 @@ export default function Summary({ p }: { p: PointResponse }) {
             </>
           )}
           .
-        </Row>
+        </Row>}
       </div>
+
+      {orchard && <OrchardNote o={orchard} cp={p.chill.to_date} season={p.season} />}
 
       {p.verdict.early && <p className="mt-1 rounded-[8px] bg-bg p-2.5 text-[12px] leading-relaxed">{EXPLAIN.early}</p>}
 

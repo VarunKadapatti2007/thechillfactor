@@ -156,6 +156,16 @@ Otherwise E4 stays and E8 is reported as tested.
 
 **Result (run after the criteria above were written):** E8 MAE 3.26 vs E4 3.44 CP. (1) E8 - E4 = -0.19 CP, 95% CI -0.42 to +0.07: **fails** (interval includes zero). (2) beats E4 on both held-out halves (3.04 vs 3.23 on 2015-26; 3.23 vs 3.51 on the other stations): passes. (3) Wildeye: +0.12 CP worse than E4: **fails**. **E8 not adopted; E4 stays the default.** E8 is shown on the Accuracy page as "tested, not adopted".
 
+## Scientific review and grower readings (2026-10-24 10:00)
+
+Question from the user: are we really closing Julia's gap? Full write-up in RESEARCH.md.
+
+- Literature: the largest Central Valley in-orchard study (Martinez-Luscher et al. 2022, 731 Semios stations) found CIMIS-only kriging explains under 10% of the spatial variation in winter chill (RMSE 3.7 CP); only dense in-orchard networks reach 2.4 CP. Our E4 (3.44 CP typical miss on 855 hidden-station winters) sits at that public-data floor.
+- Tested today, leave-one-station-out: shrinking the Daymet offset (hidden 3.95 vs 3.91 CP; orchards 3.29 vs 3.53) and stacking E0/E1/E4 (hidden MAE 3.71 but RMSE worse). Neither improves both tests; not shipped.
+- The answer to the gap is local data, which the product could not take until now. New `engine/chillprint/validation/orchard_readings.py` (real data): a site's own daily low/high from Sep 1 brings the typical miss to 1.84 CP at 18 Wildeye pistachio orchards (30 winters; station-only 3.52 with bias +2.29, readings bias -0.05) and 1.56 CP at hidden stations. From Nov 1: 1.75 / 1.67; Dec 1: 2.16 / 2.19; Jan 1: 2.77 / 2.64.
+- Shipped: `POST /api/orchard` (daily lows/highs or logger readings, °F/°C; gaps up to 4 days or 6 logger hours filled, longer gaps and days before the readings use E4; one Dynamic Model run over the merged winter; error bar = P80 for the matching start date from the in-orchard test). Web: optional step 3 "Your orchard's own readings" with CSV upload and a real example (Terra Bella Wildeye sensor, winter 2025-26: readings 68.2 CP vs the sensor's hourly truth 69.5 and the station estimate 70.2). Accuracy tab shows the start-date table.
+- Hosting: Firebase Hosting (thechill-d4688.web.app) with /api/** on Cloud Run (chillprint-api, us-west1). CIMIS's firewall rejects requests from Google Cloud addresses (same request works from a home connection), so the hosted live season is current to the last staged pull; the server records the rejection at /api/health and never caches the rejection page.
+
 ## Known traps checklist (BUILD.md section 9)
 
 - [x] FNRIC `chill-year` in two-year form (asserted in `fnric.chill_models`); arrays sorted; daily values cumulated

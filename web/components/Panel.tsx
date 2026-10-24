@@ -13,6 +13,7 @@ import AnalysisProgress from "./wizard/AnalysisProgress";
 import RunBar from "./wizard/RunBar";
 import StepCrop from "./wizard/StepCrop";
 import StepLocation from "./wizard/StepLocation";
+import StepReadings from "./wizard/StepReadings";
 
 const MIN_PROGRESS_MS = 900; // long enough to read, short enough not to stall cached results
 
@@ -69,14 +70,15 @@ export default function PanelBody() {
           {!s.run && (
             <div>
               <h2 className="text-[20px] font-semibold leading-tight">Is this winter enough for your trees?</h2>
-              <p className="mt-1 text-[13px] text-muted">Three quick steps: where your orchard is, what you grow, then run the analysis.</p>
+              <p className="mt-1 text-[13px] text-muted">Three quick steps: where your orchard is, what you grow, then run the analysis. Add your own thermometer readings if you have them.</p>
             </div>
           )}
           <StepLocation />
           <StepCrop />
+          <StepReadings n={3} />
           <div className="rounded-[12px] border border-line bg-surface p-3">
             <h2 className="mb-2 flex items-center gap-2 text-[16px] font-semibold">
-              <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full bg-bg text-[12px]">3</span>
+              <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full bg-bg text-[12px]">4</span>
               Run the analysis
             </h2>
             <RunBar

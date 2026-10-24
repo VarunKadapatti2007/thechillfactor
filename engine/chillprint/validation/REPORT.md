@@ -52,6 +52,7 @@ By terrain:
 - Pre-registered test: averaging three stations (E8) misses by 3.26 CP, 0.19 less than E4 (95% interval -0.07 to 0.42) and slightly worse at orchards, so it was not adopted.
 - Phase 6: an ML hourly shape on Daymet scores 3.55 CP vs 4.94 for the borrowed shape and 4.20 for the textbook curve (832 station-winters); it replaces the textbook curve for winters with no station record.
 - Phase 6: the ML night-low fix (E7) improves Daymet (4.25 vs E3 4.96 CP) but does not beat the E4 default (3.45); not shipped.
+- Grower readings: at 18 Wildeye pistachio orchards (30 winters), the station estimate misses by 3.52 CP (bias +2.29); adding the orchard's own daily lows and highs from Sep 1 brings it to 1.84 CP (bias -0.05), and from Jan 1 to 2.77 CP.
 
 Default for past winters: **E4**. Default for the live season: **E4**. Chosen by lowest mean absolute error on the headline set; nothing was tuned on the test set.
 
@@ -115,6 +116,23 @@ Mean abs error: {'e0': 3.06, 'e3': 5.25, 'e4': 3.98}
 | 30 | 14 | 3.8 | 6.08 |
 | 40 | 14 | 4.44 | 7.44 |
 | 50 | 14 | 5.22 | 8.34 |
+
+## Grower readings (orchard_readings.py)
+
+Mean absolute CP error (and 80th percentile) when the grower supplies daily low/high readings from the given start date; before that, the station estimate (E4). Truth is hourly data at the same site.
+
+| Scenario | Test | Station-winters | Sites | Mean abs error | P80 | Bias |
+| --- | --- | --- | --- | --- | --- | --- |
+| station_only | hidden_station | 855 | 65 | 3.44 | 5.27 | 0.48 |
+| readings_from_sep1 | hidden_station | 855 | 65 | 1.56 | 2.48 | 0.2 |
+| readings_from_nov1 | hidden_station | 855 | 65 | 1.67 | 2.66 | 0.18 |
+| readings_from_dec1 | hidden_station | 855 | 65 | 2.19 | 3.44 | 0.27 |
+| readings_from_jan1 | hidden_station | 855 | 65 | 2.64 | 4.08 | 0.37 |
+| station_only | wildeye_orchard | 30 | 18 | 3.52 | 5.29 | 2.29 |
+| readings_from_sep1 | wildeye_orchard | 30 | 18 | 1.84 | 2.84 | -0.05 |
+| readings_from_nov1 | wildeye_orchard | 30 | 18 | 1.75 | 3.14 | 0.07 |
+| readings_from_dec1 | wildeye_orchard | 30 | 18 | 2.16 | 3.43 | 0.9 |
+| readings_from_jan1 | wildeye_orchard | 30 | 18 | 2.77 | 3.93 | 1.5 |
 
 ## Outlook backtest (BUILD.md 5.6)
 

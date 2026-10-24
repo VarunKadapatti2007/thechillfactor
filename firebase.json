@@ -1,0 +1,14 @@
+{
+  "hosting": {
+    "public": "web/out",
+    "cleanUrls": true,
+    "ignore": ["firebase.json", "**/.*"],
+    "rewrites": [
+      { "source": "/api/**", "run": { "serviceId": "chillprint-api", "region": "us-west1" } }
+    ],
+    "headers": [
+      { "source": "/_next/static/**", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "/demo/**", "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }] }
+    ]
+  }
+}

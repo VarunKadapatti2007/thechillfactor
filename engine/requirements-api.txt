@@ -1,0 +1,15 @@
+# Runtime dependencies for the API container (tests, validation training and plotting stay out).
+pandas
+numpy
+numba
+scipy
+pyarrow
+requests
+tenacity
+fastapi
+uvicorn
+pydantic
+pymannkendall
+lightgbm
+httpx
+tqdm

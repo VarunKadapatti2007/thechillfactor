@@ -33,6 +33,15 @@ LY_PER_DAY_TO_WM2 = 0.4843
 QC_KEEP = {"", " ", "Y", "P"}
 
 _last_call = {"t": 0.0}
+
+
+USER_AGENT = "ChillPrint/1.0 (orchard chill estimates for California growers; UC Davis Unite Ideas)"
+
+
+class Rejected(RuntimeError):
+    """CIMIS's firewall refused the request (rate protection); back off, do not retry immediately."""
+
+
 _throttle_lock = __import__("threading").Lock()
 
 
@@ -97,7 +106,11 @@ def fetch_month_raw(nbr: int, year: int, month: int, live: bool = False) -> byte
     }
     _throttle()
     try:
-        raw = cache.http_get(DATA_URL, params=params, headers={"Ocp-Apim-Subscription-Key": k}, timeout=120)
+        raw = cache.http_get(DATA_URL, params=params, headers={"Ocp-Apim-Subscription-Key": k, "User-Agent": USER_AGENT}, timeout=120)
+        if not raw.lstrip().startswith(b"{"):
+            # CIMIS's firewall answers rate-limited requests with an HTML page and HTTP 200.
+            # Never cache it as data.
+            raise Rejected(f"CIMIS rejected the request for station {nbr} {year}-{month:02d}: {raw[:80]!r}")
     except cache.RemoteError as e:
         msg = str(e)
         # A station with no data for the month answers 4xx with a message; cache it as empty.

@@ -47,8 +47,7 @@ def series_from(cum: np.ndarray, season: int, k0: int, k1: int, step: int = 1) -
     return out
 
 
-def point(lat: float, lon: float, crop: str, variety: str, asof: date | None = None, start: str = "sep1",
-          by: str | None = None, climate: str = "today", today: date | None = None) -> dict:
+def check_inputs(crop: str, variety: str, start: str, climate: str):
     try:
         _, v = C.find_variety(crop, variety)
     except KeyError as e:
@@ -57,8 +56,19 @@ def point(lat: float, lon: float, crop: str, variety: str, asof: date | None = N
         raise BadRequest("start must be sep1 or nov1")
     if climate not in ("today", "recorded"):
         raise BadRequest("climate must be today or recorded")
+    return v
+
+
+def point(lat: float, lon: float, crop: str, variety: str, asof: date | None = None, start: str = "sep1",
+          by: str | None = None, climate: str = "today", today: date | None = None) -> dict:
+    v = check_inputs(crop, variety, start, climate)
     today = today or date.today()
-    pin = get_pin(lat, lon, today)
+    return point_for_pin(get_pin(lat, lon, today), v, asof, start, by, climate, today)
+
+
+def point_for_pin(pin: Pin, v, asof: date | None, start: str, by: str | None, climate: str, today: date,
+                  use_forecast: bool = True) -> dict:
+    """The point answer for a built pin (a grower-readings pin from orchard.py works the same way)."""
     glob = is_global(pin)
     asof = asof or default_asof(pin, today)
     season = C.season_of(asof)
@@ -74,7 +84,7 @@ def point(lat: float, lon: float, crop: str, variety: str, asof: date | None = N
     if by_d > C.season_end(season):
         raise BadRequest("by date must fall between Sep 1 and Mar 31")
 
-    fc, bias = (forecast_hours(pin, season, asof) if live else (None, None))
+    fc, bias = (forecast_hours(pin, season, asof) if live and use_forecast else (None, None))
     ol = outlook(pin, season, asof, by_d, start, climate, forecast=fc)
     p10, p50, p90 = ol.pct(10), ol.pct(50), ol.pct(90)
     ch_lo, ch_hi = ol.chance(v.need_low), ol.chance(v.need_high)

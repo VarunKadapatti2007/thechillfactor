@@ -23,7 +23,7 @@ export function useUrlState() {
     if (crop && variety) d({ type: "crop", crop, variety });
     // A shared link with a place and a crop runs the analysis straight away.
     if (q.get("lat") && q.get("lon") && Number.isFinite(lat) && Number.isFinite(lon) && crop && variety) {
-      d({ type: "run", spec: { lat, lon, label: q.get("label") ?? undefined, crop, variety, by: null, start: "sep1", climate: null, samplePts: null, areaLabel: null } });
+      d({ type: "run", spec: { lat, lon, label: q.get("label") ?? undefined, crop, variety, by: null, start: "sep1", climate: null, samplePts: null, areaLabel: null, readings: null } });
     }
     const tab = q.get("tab") as Tab | null;
     if (tab && TABS.includes(tab)) d({ type: "tab", tab });

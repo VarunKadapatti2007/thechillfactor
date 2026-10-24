@@ -145,6 +145,44 @@ class PointResponse(_Model):
     sources: list[str]
 
 
+# --- /api/orchard (additive: chill from the grower's own readings) ----------
+
+class OrchardInfo(_Model):
+    kind: Literal["daily", "hourly"]
+    first: str
+    last: str
+    days: int
+    readings_hours: int
+    gap_filled: int
+    gap_estimated: int
+    gap_unit: Literal["days", "hours"]
+    before_start_from_station: bool
+    station_estimate_cp: Optional[float]
+    difference_cp: Optional[float]
+    error_source: str
+
+
+class OrchardResponse(PointResponse):
+    orchard: OrchardInfo
+
+
+class OrchardRequest(_Model):
+    lat: float
+    lon: float
+    crop: str = "pistachio"
+    variety: str = "kerman"
+    kind: Literal["daily", "hourly"]
+    unit: Literal["F", "C"] = "F"
+    dates: Optional[list[str]] = None
+    lows: Optional[list[float]] = None
+    highs: Optional[list[float]] = None
+    times: Optional[list[str]] = None
+    temps: Optional[list[float]] = None
+    start: str = "sep1"
+    by: Optional[str] = None
+    climate: str = "today"
+
+
 # --- /api/area (additive: chill across an orchard block) ---------------------
 
 class AreaPoint(_Model):

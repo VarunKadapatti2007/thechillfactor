@@ -83,6 +83,53 @@ export interface PointResponse {
   sources: string[];
 }
 
+// The grower's own thermometer (daily lows/highs) or logger (time, temperature) readings.
+export interface Readings {
+  kind: "daily" | "hourly";
+  unit: "F" | "C";
+  dates?: string[];
+  lows?: number[];
+  highs?: number[];
+  times?: string[];
+  temps?: number[];
+  first: string;
+  last: string;
+  rows: number;
+  source: string; // file name or "sample"
+  sig: string; // identifies these readings without comparing every value
+}
+
+export interface OrchardInfo {
+  kind: "daily" | "hourly";
+  first: string;
+  last: string;
+  days: number;
+  readings_hours: number;
+  gap_filled: number;
+  gap_estimated: number;
+  gap_unit: "days" | "hours";
+  before_start_from_station: boolean;
+  station_estimate_cp: number | null;
+  difference_cp: number | null;
+  error_source: string;
+}
+
+export interface OrchardResponse extends PointResponse {
+  orchard: OrchardInfo;
+}
+
+export interface OrchardReadingsScenario {
+  mae_cp: number;
+  p80_cp: number;
+  bias_cp: number;
+  mae_mar1: number;
+}
+
+export interface OrchardReadingsSummary {
+  note: string;
+  tests: Record<string, { n_station_winters: number; n_sites: number; scenarios: Record<string, OrchardReadingsScenario> }>;
+}
+
 export interface Winter {
   season: string;
   cp_by: number;
@@ -170,6 +217,7 @@ export interface ValidationResponse {
   findings?: string[];
   sources?: string[];
   method?: string;
+  orchard_readings?: OrchardReadingsSummary;
 }
 
 export interface GridResponse {

@@ -24,6 +24,7 @@ from ..pipeline.build_pin import _version_tag
 from ..pipeline.pins import get_pin as build_pin
 from ..products.heat import heat as heat_product
 from ..products.history import history as history_product
+from ..products.orchard import orchard_point
 from ..products.point import BadRequest, point as point_product
 from ..products.replay import replay as replay_product
 from . import schemas as S
@@ -48,7 +49,11 @@ def _warm() -> None:
 import threading  # noqa: E402
 
 threading.Thread(target=_warm, daemon=True).start()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
+
+from ..pipeline import live_refresh  # noqa: E402
+
+live_refresh.start_background()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
 
 CACHE = C.PROCESSED_DIR / "api_cache"
 # Code fingerprint: responses cached by an older engine are never served after a code change.
@@ -69,7 +74,7 @@ def _clean(o):
 
 
 def _cached(name: str, params: dict, build, model=None):
-    tag = f"{_version_tag()}|{CODE_TAG}|{date.today()}"
+    tag = f"{_version_tag()}|{CODE_TAG}|{live_refresh.STATE['stamp']}|{date.today()}"
     key = hashlib.sha1(json.dumps([name, params, tag], sort_keys=True, default=str).encode()).hexdigest()[:24]
     p = CACHE / f"{name}_{key}.json"
     if p.exists():
@@ -104,7 +109,8 @@ def _mmdd(v: str | None) -> str | None:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "hourly_stations": len(SH.hourly_index()), "tag": _version_tag()}
+    return {"ok": True, "hourly_stations": len(SH.hourly_index()), "tag": _version_tag(),
+            "live_refresh": {k: v for k, v in live_refresh.STATE.items() if k != "stamp"}}
 
 
 @app.get("/api/crops")
@@ -228,6 +234,16 @@ def area(pts: str = Query(..., description="lat,lon;lat,lon;... up to 9 points a
     return _cached("area", params, build, S.AreaResponse)
 
 
+@app.post("/api/orchard")
+def orchard(req: S.OrchardRequest):
+    """Chill at the orchard from the grower's own thermometer or logger readings (validated: orchard_readings)."""
+    if not (-60 <= req.lat <= 70 and -180 <= req.lon <= 180):
+        raise HTTPException(400, "lat/lon out of range")
+    _variety(req.crop, req.variety)
+    params = {**req.model_dump(), "lat": round(req.lat, 4), "lon": round(req.lon, 4), "by": _mmdd(req.by)}
+    return _cached("orchard", params, lambda: orchard_point(**params), S.OrchardResponse)
+
+
 @app.get("/api/heat")
 def heat(lat: float = Query(..., ge=-60, le=70), lon: float = Query(..., ge=-180, le=180), bloom: str = "02-20"):
     b = _mmdd(bloom)
@@ -242,6 +258,9 @@ def validation():
         raise HTTPException(503, "validation has not been run yet")
     out = json.loads(p.read_text(encoding="utf-8"))
     S.ValidationResponse(**{k: v for k, v in out.items() if k in S.ValidationResponse.model_fields})
+    orp = C.VALIDATION_DIR / "orchard_readings.json"
+    if orp.exists():
+        out["orchard_readings"] = json.loads(orp.read_text(encoding="utf-8"))
     return out
 
 

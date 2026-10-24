@@ -1,5 +1,6 @@
 # secrets
 .env
+run_env.yaml
 
 # python
 __pycache__/
@@ -27,3 +28,9 @@ Thumbs.db
 
 # logs
 engine/data/logs/
+
+# staged API container data
+engine/deploy_data/
+
+# firebase cli cache
+.firebase/

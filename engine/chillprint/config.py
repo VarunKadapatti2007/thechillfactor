@@ -14,7 +14,7 @@ from pathlib import Path
 
 ENGINE_DIR = Path(__file__).resolve().parents[1]
 REPO_DIR = ENGINE_DIR.parent
-DATA_DIR = ENGINE_DIR / "data"
+DATA_DIR = Path(os.environ.get("CHILLPRINT_DATA_DIR", ENGINE_DIR / "data"))
 RAW_DIR = DATA_DIR / "raw"
 CACHE_DIR = DATA_DIR / "cache"
 PROCESSED_DIR = DATA_DIR / "processed"

@@ -164,6 +164,15 @@ def summarize() -> dict:
     if e7_info:
         findings.append(f"Phase 6: the ML night-low fix (E7) improves Daymet ({e7_info['hidden_e7_mae']:.2f} vs E3 {e7_info['hidden']['e3_mae']:.2f} CP) "
                         f"but does not beat the {e7_info['default']} default ({e7_info['hidden_default_mae']:.2f}); not shipped.")
+    orp = V.OUT / "orchard_readings.json"
+    orchard_readings = json.loads(orp.read_text(encoding="utf-8")) if orp.exists() else None
+    if orchard_readings and "wildeye_orchard" in orchard_readings["tests"]:
+        w = orchard_readings["tests"]["wildeye_orchard"]
+        sc = w["scenarios"]
+        findings.append(f"Grower readings: at {w['n_sites']} Wildeye pistachio orchards ({w['n_station_winters']} winters), the station "
+                        f"estimate misses by {sc['station_only']['mae_cp']:.2f} CP (bias {sc['station_only']['bias_cp']:+.2f}); adding the "
+                        f"orchard's own daily lows and highs from Sep 1 brings it to {sc['readings_from_sep1']['mae_cp']:.2f} CP "
+                        f"(bias {sc['readings_from_sep1']['bias_cp']:+.2f}), and from Jan 1 to {sc['readings_from_jan1']['mae_cp']:.2f} CP.")
     summary = {
         "n_stations": int(hc.station_id.nunique()),
         "n_station_seasons": int(hc[["station_id", "season"]].drop_duplicates().shape[0]),
@@ -254,6 +263,16 @@ def _write_report(s: dict) -> None:
               "| Missing % | Gap length (days) | Mean abs error | P80 |", "| --- | --- | --- | --- |"]
     for c in d["data_diet_curve"]:
         lines.append(f"| {c['missing_pct']:.0f} | {c['gap_days']:.0f} | {c['mae_cp']} | {c['p80_cp']} |")
+    orp = V.OUT / "orchard_readings.json"
+    if orp.exists():
+        o = json.loads(orp.read_text(encoding="utf-8"))
+        lines += ["", "## Grower readings (orchard_readings.py)", "", o["note"], "",
+                  "| Scenario | Test | Station-winters | Sites | Mean abs error | P80 | Bias |", "| --- | --- | --- | --- | --- | --- | --- |"]
+        for test, t in o["tests"].items():
+            for sc in ("station_only", "readings_from_sep1", "readings_from_nov1", "readings_from_dec1", "readings_from_jan1"):
+                r = t["scenarios"].get(sc)
+                if r:
+                    lines.append(f"| {sc} | {test} | {t['n_station_winters']} | {t['n_sites']} | {r['mae_cp']} | {r['p80_cp']} | {r['bias_cp']} |")
     lines += ["", "## Outlook backtest (BUILD.md 5.6)", ""]
     if d["backtest"]:
         for k, v in d["backtest"]["by_climate"].items():

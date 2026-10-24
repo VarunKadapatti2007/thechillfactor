@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { getArea, getCrops, getGrid, getHeat, getHistory, getPoint, getReplay, getStations, getValidation } from "./api";
+import { getArea, getCrops, getGrid, getHeat, getHistory, getPoint, getReplay, getStations, getValidation, postOrchard } from "./api";
 import { useAsync, type AsyncState } from "./hooks";
 import { useStore } from "./store";
 import type {
@@ -53,7 +53,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         climate: r.climate ?? undefined,
       }
     : null;
-  const point = useAsync(() => getPoint(pointQ!), pointQ ? `${r!.n}:${JSON.stringify(pointQ)}` : null);
+  // With the grower's own readings, the main answer comes from them (POST /api/orchard).
+  const point = useAsync<PointResponse>(
+    () => (r?.readings ? postOrchard(pointQ!, r.readings) : getPoint(pointQ!)),
+    pointQ ? `${r!.n}:${JSON.stringify(pointQ)}:${r!.readings?.sig ?? ""}` : null,
+  );
 
   const histQ = r ? { lat: r.lat, lon: r.lon, crop: r.crop, variety: r.variety, by: r.by ?? undefined } : null;
   // Secondary sections load after the main answer so they never slow it down.

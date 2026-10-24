@@ -32,14 +32,16 @@ export function buildSpec(s: ReturnType<typeof useStore>["s"]): Omit<RunSpec, "n
     climate: s.climate,
     samplePts: samplePts && samplePts.length > 1 ? samplePts : null,
     areaLabel: samplePts && samplePts.length > 1 ? areaLabel : null,
+    readings: s.readings,
   };
 }
 
 function same(a: Omit<RunSpec, "n"> | null, b: RunSpec | null): boolean {
   if (!a || !b) return false;
-  const { n: _n, ...rest } = b;
+  const { n: _n, readings: rb, ...rest } = b;
   void _n;
-  return JSON.stringify(a) === JSON.stringify(rest);
+  const { readings: ra, ...restA } = a;
+  return JSON.stringify(restA) === JSON.stringify(rest) && (ra?.sig ?? null) === (rb?.sig ?? null);
 }
 
 export default function RunBar({ onRun }: { onRun: () => void }) {

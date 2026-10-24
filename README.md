@@ -9,7 +9,8 @@ ChillPrint estimates winter chill for California fruit and nut growers at the ex
 - the odds of reaching the need by a set date,
 - the past winter this one most resembles,
 - a time machine that replays any past winter day by day,
-- a land history card: every winter since 1980-81 at that parcel, with the trend and safe winter chill.
+- a land history card: every winter since 1980-81 at that parcel, with the trend and safe winter chill,
+- and, if the grower has a min/max thermometer or a logger in the orchard, chill counted from its own readings (typical miss 1.8 CP at 18 real orchards, against 3.5 CP from stations alone).
 
 Built for the UC Davis Reboot the Earth hackathon (FNRIC "Counting the Cold" challenge), October 2026.
 
@@ -41,6 +42,8 @@ Open-Meteo ─── 16-day forecast (live season)
 The engine reproduces FNRIC's own numbers exactly: on Davis CIMIS hourly over three winters our Dynamic Model gives 61.613, 91.277 and 83.401 CP, the same as FNRIC to three decimals, with identical daily values. That needed FNRIC's conventions, which we found by testing: chill is computed from CIMIS's °F readings, with T + 273 K, and missing hours are skipped rather than filled.
 
 **What did not work, said plainly:** the textbook plan was Daymet daily + a borrowed station shape (E3). On hidden stations it misses by more than simply using the nearest station (4.9 vs 3.9 CP), because Daymet runs warm at night at these irrigated, cold-air-pooling sites. The borrowed shape itself is fine: given the orchard's own daily low and high it is the best method we tested (1.6 CP). So the default became E4.
+
+**Is the gap closed?** Not by public data alone. No method built on the public station network gets much below about 3.5 CP at an orchard; a 731-station in-orchard study found the same floor. Local data breaks through it, so the app takes the grower's own thermometer or logger readings (optional step 3). The scientific review, tests and sources are in [RESEARCH.md](RESEARCH.md).
 
 ## Validation
 
@@ -77,6 +80,7 @@ Findings:
 - Pre-registered test: averaging three stations (E8) misses by 3.26 CP, 0.19 less than E4 (95% interval -0.07 to 0.42) and slightly worse at orchards, so it was not adopted.
 - Phase 6: an ML hourly shape on Daymet scores 3.55 CP vs 4.94 for the borrowed shape and 4.20 for the textbook curve (832 station-winters); it replaces the textbook curve for winters with no station record.
 - Phase 6: the ML night-low fix (E7) improves Daymet (4.25 vs E3 4.96 CP) but does not beat the E4 default (3.45); not shipped.
+- Grower readings: at 18 Wildeye pistachio orchards (30 winters), the station estimate misses by 3.52 CP (bias +2.29); adding the orchard's own daily lows and highs from Sep 1 brings it to 1.84 CP (bias -0.05), and from Jan 1 to 2.77 CP.
 <!-- validation:end -->
 
 Full tables: [engine/chillprint/validation/REPORT.md](engine/chillprint/validation/REPORT.md).
@@ -119,6 +123,21 @@ powershell -ExecutionPolicy Bypass -File scripts\start_local.ps1
 ```
 
 Shareable links work too, e.g. `http://localhost:3000/?lat=39.63&lon=-121.8&crop=pistachio&variety=kerman&tab=history`.
+
+### Hosted (Firebase Hosting + Cloud Run)
+
+The web app is a static export on Firebase Hosting; `/api/**` is rewritten to the `chillprint-api` Cloud Run service (us-west1), which serves the same real data. The CIMIS key goes to Cloud Run as an environment variable, never into the image or the web bundle. With `CHILLPRINT_LIVE_REFRESH=1` the server re-pulls this month's CIMIS hours for every Central Valley station at start and every 6 hours. If CIMIS's firewall rejects a request, the server keeps the data it has and reports the error at `/api/health`.
+
+```bash
+engine/.venv/Scripts/python scripts/stage_api_data.py          # real data the API needs -> engine/deploy_data
+gcloud run deploy chillprint-api --source engine --region us-west1 --allow-unauthenticated \
+  --memory 2Gi --cpu 2 --concurrency 8 --timeout 300 --min-instances 1 --max-instances 3 \
+  --no-cpu-throttling --env-vars-file run_env.yaml               # CIMIS_APP_KEY, CHILLPRINT_LIVE_REFRESH=1
+cd web && NEXT_OUTPUT=export NEXT_DIST_DIR=out NEXT_PUBLIC_API_BASE= npx next build --turbopack && cd ..
+npx firebase-tools deploy --only hosting --project thechill-d4688
+```
+
+After the event, stop paying for the always-on instance: `gcloud run services update chillprint-api --region us-west1 --min-instances 0 --cpu-throttling` (the first request after idle then takes a few seconds longer, and the live refresh runs only while requests arrive).
 
 ## Demo script (90 seconds)
 

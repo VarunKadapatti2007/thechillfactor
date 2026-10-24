@@ -12,6 +12,51 @@ import { ErrorLine, Section, Skeleton, cn } from "../ui";
 // Validated categorical order (dataviz palette, adjacent pairs pass; contrast WARN -> legend + table view).
 const DURHAM = { truth: "#2a78d6", e0: "#eb6834", e3: "#1baf7a", e4: "#eda100" };
 
+const READING_ROWS: [string, string][] = [
+  ["station_only", "No readings (station estimate)"],
+  ["readings_from_sep1", "Readings from Sep 1"],
+  ["readings_from_nov1", "Readings from Nov 1"],
+  ["readings_from_dec1", "Readings from Dec 1"],
+  ["readings_from_jan1", "Readings from Jan 1"],
+];
+
+function ReadingsTable({ o }: { o: NonNullable<ValidationResponse["orchard_readings"]> }) {
+  const we = o.tests.wildeye_orchard;
+  const hs = o.tests.hidden_station;
+  const fmt = (x: number | undefined) => (x === undefined ? "Not available" : x.toFixed(1));
+  const sentence =
+    we && we.scenarios.station_only && we.scenarios.readings_from_sep1
+      ? `At ${we.n_sites} pistachio orchards, a min/max thermometer cut the typical miss from ${we.scenarios.station_only.mae_cp.toFixed(1)} to ${we.scenarios.readings_from_sep1.mae_cp.toFixed(1)} chill portions.`
+      : "Typical miss when the grower adds daily lows and highs.";
+  return (
+    <Section
+      title="Your own readings"
+      sentence={sentence}
+      info="We gave the method each site's own daily low and high (what a min/max thermometer records) from the start date on, used the station estimate before that, rebuilt the hours from the nearest stations' shape, and compared chill on Feb 1 and Mar 1 with the site's hourly truth."
+    >
+      <table className="num w-full text-left text-[12px]">
+        <thead>
+          <tr className="text-muted">
+            <th className="py-1 font-medium">Typical miss (CP)</th>
+            {we && <th className="py-1 text-right font-medium">In orchards ({we.n_station_winters} winters)</th>}
+            {hs && <th className="py-1 text-right font-medium">Hidden stations ({hs.n_station_winters})</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {READING_ROWS.map(([k, label]) => (
+            <tr key={k} className="border-t border-line">
+              <td className="py-1">{label}</td>
+              {we && <td className="py-1 text-right">{fmt(we.scenarios[k]?.mae_cp)}</td>}
+              {hs && <td className="py-1 text-right">{fmt(hs.scenarios[k]?.mae_cp)}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-1 text-[11px] text-muted">Starting late still helps. The thermometer must be shaded and ventilated, like a weather station.</p>
+    </Section>
+  );
+}
+
 function Bars({ items, highlight, max }: { items: { id: string; name: string; mae: number | null; p80?: number | null }[]; highlight: string[]; max: number }) {
   return (
     <ul className="space-y-1.5">
@@ -198,6 +243,8 @@ function Accuracy({ v }: { v: ValidationResponse }) {
       {v.e5_note && (
         <Section title="One reading a day" sentence={v.e5_note} info="E5 uses the orchard's own daily low and high plus the nearest station's hourly shape. A simple min/max thermometer gives this." />
       )}
+
+      {v.orchard_readings && <ReadingsTable o={v.orchard_readings} />}
 
       <Section title="Are the odds honest?" sentence={v.backtest.brier !== null && v.backtest.brier_climatology !== null ? `Outlook score ${v.backtest.brier.toFixed(3)} vs ${v.backtest.brier_climatology.toFixed(3)} for past-winter shares alone (lower is better).` : "Not available"} info="Brier score from replaying every station-winter on Dec 1, Jan 1 and Feb 1, never using the winter being tested.">
         {v.backtest.reliability.length > 0 && (

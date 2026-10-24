@@ -12,7 +12,9 @@ import type {
   GridResponse,
   HeatResponse,
   HistoryResponse,
+  OrchardResponse,
   PointQuery,
+  Readings,
   PointResponse,
   ReplayResponse,
   StationsResponse,
@@ -133,6 +135,30 @@ export function getPoint(q: PointQuery) {
     },
     "point",
   );
+}
+
+// The grower's own readings always go to the live API (they are never in the offline bundle).
+export async function postOrchard(q: PointQuery, rd: Readings): Promise<Result<OrchardResponse>> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 120000);
+  const body = {
+    lat: q.lat, lon: q.lon, crop: q.crop, variety: q.variety, kind: rd.kind, unit: rd.unit,
+    ...(rd.kind === "daily" ? { dates: rd.dates, lows: rd.lows, highs: rd.highs } : { times: rd.times, temps: rd.temps }),
+    ...(q.start ? { start: q.start } : {}), ...(q.by ? { by: q.by } : {}), ...(q.climate ? { climate: q.climate } : {}),
+  };
+  try {
+    const r = await fetch(`${API_BASE}/api/orchard`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal,
+    });
+    if (!r.ok) {
+      let msg = `${r.status}`;
+      try { msg = ((await r.json()) as { detail?: string }).detail ?? msg; } catch {}
+      throw new Error(msg);
+    }
+    return { data: (await r.json()) as OrchardResponse, origin: "api" };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function getHistory(q: { lat: number; lon: number; crop: string; variety: string; by?: string }) {

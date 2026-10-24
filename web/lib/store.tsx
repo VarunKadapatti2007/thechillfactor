@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
 import type { Units } from "./format";
-import type { ClimateOpt, StartOpt } from "./types";
+import type { ClimateOpt, Readings, StartOpt } from "./types";
 
 export type Tab = "winter" | "history" | "heat" | "accuracy";
 export type GridLayer = "off" | "safe_chill" | "chill_so_far";
@@ -22,6 +22,7 @@ export interface RunSpec {
   climate: ClimateOpt | null;
   samplePts: [number, number][] | null; // [lat, lon] across a block
   areaLabel: string | null;
+  readings: Readings | null;
   n: number;
 }
 
@@ -50,6 +51,7 @@ export interface AppState {
   radiusKm: number;
   outline: [number, number][]; // [lon, lat]
   outlineClosed: boolean;
+  readings: Readings | null;
   run: RunSpec | null;
 }
 
@@ -72,6 +74,7 @@ export type Action =
   | { type: "outlineAdd"; lon: number; lat: number }
   | { type: "outlineClose" }
   | { type: "outlineClear" }
+  | { type: "readings"; readings: Readings | null }
   | { type: "run"; spec: Omit<RunSpec, "n"> }
   | { type: "resetRun" };
 
@@ -94,6 +97,7 @@ const initial: AppState = {
   radiusKm: 1,
   outline: [],
   outlineClosed: false,
+  readings: null,
   run: null,
 };
 
@@ -148,6 +152,8 @@ function reducer(s: AppState, a: Action): AppState {
     }
     case "outlineClear":
       return { ...s, outline: [], outlineClosed: false };
+    case "readings":
+      return { ...s, readings: a.readings };
     case "run":
       return { ...s, run: { ...a.spec, n: (s.run?.n ?? 0) + 1 }, replaySeason: null, sheet: s.sheet === "peek" ? "half" : s.sheet };
     case "resetRun":
