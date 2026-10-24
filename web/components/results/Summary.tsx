@@ -26,6 +26,35 @@ function Row({ icon, label, info, children }: { icon: ReactNode; label: string; 
   );
 }
 
+function FlagNote({ o, unit }: { o: OrchardInfo; unit: string }) {
+  if (!o.flagged_count) {
+    return (
+      <p className="mt-2 text-[12px] text-muted">
+        Every reading was checked against the Central Valley&apos;s range and what nearby stations measured; none looked wrong.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 rounded-[8px] border border-amber-300 bg-amber-50 p-2.5 text-[12px] leading-relaxed text-amber-900" role="status">
+      <p className="font-semibold">
+        {o.flagged_count} reading{o.flagged_count > 1 ? "s were" : " was"} set aside because {o.flagged_count > 1 ? "they don't" : "it doesn't"} look right. Those
+        days were filled from the days around them. Check your thermometer or file:
+      </p>
+      <ul className="mt-1 list-disc pl-4">
+        {o.flagged.slice(0, 6).map((f) => (
+          <li key={`${f.when}-${f.field}`}>
+            <strong>
+              {f.when}: {f.field} {f.value}°{unit}
+            </strong>
+            {f.expected !== null ? `, nearby stations suggest about ${Math.round(f.expected)}°` : ""}. {f.reason.charAt(0).toUpperCase() + f.reason.slice(1)}.
+          </li>
+        ))}
+      </ul>
+      {o.flagged_count > 6 && <p className="mt-1">... and {o.flagged_count - 6} more.</p>}
+    </div>
+  );
+}
+
 function OrchardNote({ o, cp, season }: { o: OrchardInfo; cp: number; season: string }) {
   const diff = o.difference_cp;
   return (
@@ -116,6 +145,7 @@ export default function Summary({ p }: { p: PointResponse }) {
       </div>
 
       {orchard && <OrchardNote o={orchard} cp={p.chill.to_date} season={p.season} />}
+      {orchard && <FlagNote o={orchard} unit={r.readings?.unit ?? "F"} />}
 
       {p.verdict.early && <p className="mt-1 rounded-[8px] bg-bg p-2.5 text-[12px] leading-relaxed">{EXPLAIN.early}</p>}
 

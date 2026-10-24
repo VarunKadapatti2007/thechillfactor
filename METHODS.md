@@ -134,6 +134,11 @@ Daymet's daily low and high are turned into hours with a machine-learned daily c
 - **Gaps:** up to 4 days (or 6 logger hours) are filled from the days around them. Longer gaps, and days before the readings start, use E4.
 - **One run:** the Dynamic Model runs once over the merged winter, so its state carries across.
 - **Any file layout** [`engine/chillprint/products/readings_parse.py`]: Excel, CSV and text exports, Word tables and PDF text become one table. Built-in rules find the date, low and high (or temperature) columns from their headers. When the layout is unusual, an AI reader (Claude Haiku) sees a preview and names the columns. Code then reads every value from the file, so the AI never supplies a number. Before use, the grower sees the first rows exactly as read.
+- **Quality checks** [`products/orchard.py`: `qc_daily`, `qc_hourly`]: before anything is counted, each reading is checked, and any that fail are set aside (those days are filled like any gap) and listed for the grower with the reason and what nearby stations measured:
+  1. A low above its high: the one further from the station estimate is set aside.
+  2. Outside the Central Valley's range: a low below 5 °F (-15 °C) or a high above 117 °F (47 °C). Of 352,065 real CIMIS station-days (Sep to Mar, 1982-2026), fewer than 1 in 10,000 went beyond these.
+  3. Far from what nearby stations measured that day, after removing the orchard's usual offset: a low more than 18 °F (10 °C) away, a high more than 27 °F (15 °C) away, a logger hour more than 29 °F (16 °C) away. At 18 real orchards (6,204 days) no low strayed more than 7.8 °C and no high more than 14.8 °C, so real orchard data passes.
+  If more than 1 in 5 readings fail, the file is refused with a hint to check the °F/°C setting and the columns. On the five demo files, the four real ones pass untouched and all three planted mistakes in file 5 are caught.
 - **The orchard log** (`/log`): one low and one high per day, typed in or imported from a file, saved on the grower's device and sent only when they check their chill.
 
 [`engine/chillprint/products/orchard.py`]

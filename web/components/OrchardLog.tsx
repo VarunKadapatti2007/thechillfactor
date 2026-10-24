@@ -51,9 +51,14 @@ export default function OrchardLogPage() {
       return;
     }
     const [a, b] = lo <= hi ? [lo, hi] : [hi, lo];
-    const lim = log.unit === "F" ? [-20, 120] : [-30, 50];
+    // The Central Valley's real range, Sep to Mar (same limits as the analysis; see METHODS.md).
+    const lim = log.unit === "F" ? [5, 117] : [-15, 47];
     if (a < lim[0] || b > lim[1]) {
-      setMsg({ ok: false, text: `Those look out of range for °${log.unit}. Check the unit at the top.` });
+      setMsg({ ok: false, text: `Those are outside what the Central Valley ever sees in winter (${lim[0]}° to ${lim[1]}°${log.unit}). Check the reading and the °F/°C setting at the top.` });
+      return;
+    }
+    if (lo > hi) {
+      setMsg({ ok: false, text: "The low is above the high. Check which number is which." });
       return;
     }
     commit({ ...log, entries: { ...log.entries, [day]: { low: a, high: b } } });

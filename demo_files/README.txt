@@ -8,5 +8,9 @@ ChillPrint demo files - all real readings from an in-orchard sensor in a pistach
 4_orchard_last-winter_notebook.xlsx  last winter as a hand-kept sheet with odd headers
                                      ('Coldest overnight', 'Warmest afternoon'): the AI reader works it out
 
+5_orchard_last-winter_with-3-mistakes.csv  file 2 with three values changed ON PURPOSE to show the error checks:
+                                     Dec 15 low set to -6, Jan 10 high set to 100, Feb 2 low set to 100.
+                                     ChillPrint flags all three and sets them aside. Everything else is real.
+
 Put the pin on the orchard (Terra Bella, about 35.96, -119.07) so the comparison with the stations is for the
 same place.

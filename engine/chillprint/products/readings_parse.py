@@ -343,8 +343,8 @@ def apply_mapping(rows: list[list[str]], m: dict) -> dict:
         lo = np.array([_num(x) for x in _col(body, m["low_column"])])
         hi = np.array([_num(x) for x in _col(body, m["high_column"])])
         ok = ts.notna().to_numpy() & np.isfinite(lo) & np.isfinite(hi)
-        df = pd.DataFrame({"date": ts[ok].dt.strftime("%Y-%m-%d").to_numpy(),
-                           "low": np.minimum(lo[ok], hi[ok]), "high": np.maximum(lo[ok], hi[ok])})
+        # Values are kept exactly as written (a low above its high is flagged later, never swapped).
+        df = pd.DataFrame({"date": ts[ok].dt.strftime("%Y-%m-%d").to_numpy(), "low": lo[ok], "high": hi[ok]})
         df = df.drop_duplicates("date", keep="last").sort_values("date")
         return {"kind": "daily", "dates": df.date.tolist(), "lows": df.low.round(2).tolist(),
                 "highs": df.high.round(2).tolist(), "skipped_rows": int((~ok).sum())}
@@ -367,6 +367,27 @@ def _unit(m: dict, values: list[float]) -> str:
 def _good(out: dict) -> bool:
     n = len(out.get("dates") or out.get("times") or [])
     return n >= (3 if out["kind"] == "daily" else 72) and out["skipped_rows"] <= max(5, 0.3 * (n + out["skipped_rows"]))
+
+
+def _suspect(out: dict, unit: str) -> list[dict]:
+    """Readings that cannot be right whatever the place: a low above its high, or outside the Central
+    Valley's range (the same limits as products/orchard.py). The station comparison runs at analysis time."""
+    from .orchard import HIGH_MAX_C, LOW_MIN_C
+    c = (lambda v: (v - 32) * 5 / 9) if unit == "F" else (lambda v: v)
+    found = []
+    if out["kind"] == "daily":
+        for d, lo, hi in zip(out["dates"], out["lows"], out["highs"]):
+            if lo > hi + (0.9 if unit == "F" else 0.5):
+                found.append({"when": d, "field": "low", "value": lo, "reason": "the low is above the high"})
+            elif c(lo) < LOW_MIN_C:
+                found.append({"when": d, "field": "low", "value": lo, "reason": "colder than the Central Valley gets in winter"})
+            elif c(hi) > HIGH_MAX_C:
+                found.append({"when": d, "field": "high", "value": hi, "reason": "hotter than the Central Valley gets from Sep to Mar"})
+    else:
+        for t, v in zip(out["times"], out["temps"]):
+            if c(v) < LOW_MIN_C or c(v) > HIGH_MAX_C:
+                found.append({"when": t, "field": "reading", "value": v, "reason": "outside the Central Valley's range"})
+    return found
 
 
 # --- 4. The whole read ------------------------------------------------------------------------
@@ -414,7 +435,14 @@ def parse_file(filename: str, data: bytes) -> dict:
         preview = [{"when": a, "temp": b} for a, b in zip(out["times"][:5], out["temps"][:5])]
     if out["skipped_rows"]:
         steps.append(f"Skipped {out['skipped_rows']} rows without a usable date and temperature.")
-    return {**out, "unit": unit, "first": first, "last": last, "rows": n, "method": method,
+    suspect = _suspect(out, unit)
+    if suspect:
+        ex = suspect[0]
+        steps.append(f"{len(suspect)} reading{'s look' if len(suspect) > 1 else ' looks'} wrong (for example {ex['when']}: "
+                     f"{ex['field']} {ex['value']:g}°{unit}, {ex['reason']}). Readings like these are set aside when you run the analysis.")
+    else:
+        steps.append("Checked every reading: none is impossible or outside the Central Valley's range.")
+    return {**out, "unit": unit, "first": first, "last": last, "rows": n, "method": method, "suspect": suspect[:20],
             "explanation": m.get("explanation", ""), "steps": steps, "preview": preview,
             "columns": {"date": name(m["date_column"]), "time": name(m["time_column"]), "low": name(m["low_column"]),
                         "high": name(m["high_column"]), "temp": name(m["temp_column"])}}

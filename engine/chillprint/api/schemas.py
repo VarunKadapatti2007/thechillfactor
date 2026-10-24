@@ -147,6 +147,14 @@ class PointResponse(_Model):
 
 # --- /api/orchard (additive: chill from the grower's own readings) ----------
 
+class Flag(_Model):
+    when: str
+    field: Literal["low", "high", "reading"]
+    value: float
+    expected: Optional[float]
+    reason: str
+
+
 class OrchardInfo(_Model):
     kind: Literal["daily", "hourly"]
     first: str
@@ -160,6 +168,8 @@ class OrchardInfo(_Model):
     station_estimate_cp: Optional[float]
     difference_cp: Optional[float]
     error_source: str
+    flagged: list[Flag]
+    flagged_count: int
 
 
 class OrchardResponse(PointResponse):

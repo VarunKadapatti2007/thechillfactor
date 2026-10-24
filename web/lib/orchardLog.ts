@@ -85,6 +85,7 @@ export interface ParsedFile {
   explanation: string;
   steps: string[];
   preview: { when: string; low?: number; high?: number; temp?: number }[];
+  suspect: { when: string; field: string; value: number; reason: string }[];
   columns: Record<string, string | null>;
 }
 

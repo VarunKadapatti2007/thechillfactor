@@ -195,6 +195,25 @@ export default function StepReadings({ n }: { n: number }) {
                 </p>
               )}
               <Preview p={read.parsed} />
+              {read.parsed.suspect.length > 0 && (
+                <div className="mt-2 rounded-[8px] border border-amber-300 bg-amber-50 p-2.5 text-[12px] leading-relaxed text-amber-900" role="status">
+                  <p className="font-semibold">
+                    {read.parsed.suspect.length} reading{read.parsed.suspect.length > 1 ? "s look" : " looks"} wrong. They will be set aside, and those days
+                    filled from the days around them:
+                  </p>
+                  <ul className="mt-1 list-disc pl-4">
+                    {read.parsed.suspect.slice(0, 5).map((f) => (
+                      <li key={`${f.when}-${f.field}`}>
+                        <strong>
+                          {f.when}: {f.field} {f.value}°{read.parsed.unit}
+                        </strong>
+                        . {f.reason.charAt(0).toUpperCase() + f.reason.slice(1)}.
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1">When you run the analysis, every reading is also checked against what nearby weather stations measured that day.</p>
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button variant="primary" className="h-10 text-[14px]" onClick={() => d({ type: "readings", readings: fileReadings(read.parsed, read.file.name) })}>
                   <Check size={16} aria-hidden /> Use these readings

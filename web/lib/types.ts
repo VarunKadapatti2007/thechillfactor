@@ -112,6 +112,16 @@ export interface OrchardInfo {
   station_estimate_cp: number | null;
   difference_cp: number | null;
   error_source: string;
+  flagged: ReadingFlag[];
+  flagged_count: number;
+}
+
+export interface ReadingFlag {
+  when: string;
+  field: "low" | "high" | "reading";
+  value: number;
+  expected: number | null;
+  reason: string;
 }
 
 export interface OrchardResponse extends PointResponse {

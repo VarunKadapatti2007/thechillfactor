@@ -60,8 +60,13 @@ def main() -> None:
 
     # 2. Last winter: the same kind of log as CSV.
     d2 = daily(last, "2025-09-01", "2026-03-01")
-    pd.DataFrame({"date": d2.index.strftime("%Y-%m-%d"), "low_f": F(d2.tmin).round(1), "high_f": F(d2.tmax).round(1)}) \
-        .to_csv(OUT / "2_orchard_last-winter_daily.csv", index=False)
+    x2 = pd.DataFrame({"date": d2.index.strftime("%Y-%m-%d"), "low_f": F(d2.tmin).round(1), "high_f": F(d2.tmax).round(1)})
+    x2.to_csv(OUT / "2_orchard_last-winter_daily.csv", index=False)
+
+    # 5. File 2 with three values changed on purpose, to show the error checks (labeled in README.txt).
+    x5 = x2.astype({"low_f": object, "high_f": object}).set_index("date")
+    x5.loc["2025-12-15", "low_f"], x5.loc["2026-01-10", "high_f"], x5.loc["2026-02-02", "low_f"] = -6, 100, 100
+    x5.reset_index().to_csv(OUT / "5_orchard_last-winter_with-3-mistakes.csv", index=False)
 
     # 3. Last winter as an hourly logger export: local clock time, a title line, and the sensor's other real
     #    channels (humidity, battery temperature), which the reader must not mistake for air temperature.
@@ -96,6 +101,9 @@ def main() -> None:
         "                                     plus the sensor's humidity and battery columns, which ChillPrint ignores)\n"
         "4_orchard_last-winter_notebook.xlsx  last winter as a hand-kept sheet with odd headers\n"
         "                                     ('Coldest overnight', 'Warmest afternoon'): the AI reader works it out\n\n"
+        "5_orchard_last-winter_with-3-mistakes.csv  file 2 with three values changed ON PURPOSE to show the error checks:\n"
+        "                                     Dec 15 low set to -6, Jan 10 high set to 100, Feb 2 low set to 100.\n"
+        "                                     ChillPrint flags all three and sets them aside. Everything else is real.\n\n"
         "Put the pin on the orchard (Terra Bella, about 35.96, -119.07) so the comparison with the stations is for the\n"
         "same place.\n",
         encoding="utf-8")

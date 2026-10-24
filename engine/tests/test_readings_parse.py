@@ -19,10 +19,11 @@ def test_daily_csv_with_units_in_headers():
     assert out["lows"] == [38, 40, 36] and out["highs"] == [62, 64, 58]
 
 
-def test_tab_separated_celsius_and_low_high_swapped_per_row():
+def test_tab_separated_celsius_and_a_low_above_its_high_is_flagged_not_swapped():
     out = R.parse_file("log.txt", _csv("day\tlow °C\thigh °C\n2026-11-01\t16.5\t3.2\n2026-11-02\t4.1\t17.0\n2026-11-03\t2.0\t15.2\n"))
     assert out["unit"] == "C"
-    assert out["lows"][0] == 3.2 and out["highs"][0] == 16.5  # a row with the two swapped is put right
+    assert out["lows"][0] == 16.5 and out["highs"][0] == 3.2  # kept exactly as written
+    assert out["suspect"][0]["when"] == "2026-11-01" and "above the high" in out["suspect"][0]["reason"]
 
 
 def test_logger_with_title_line_index_and_other_channels():

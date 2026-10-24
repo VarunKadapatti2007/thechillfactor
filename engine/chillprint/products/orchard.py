@@ -21,7 +21,7 @@ from .. import config as C
 from ..pipeline import station_hourly as SH
 from ..pipeline.build_pin import Pin, season_stamps
 from ..pipeline.pins import get_pin, is_global
-from ..science.hourly import MIDNIGHT, borrowed_shape
+from ..science.hourly import MIDNIGHT, borrowed_shape, window_minmax
 from .core import dos, season_daily_cum, start_dos
 from .errorbar import _growth
 from .point import BadRequest, check_inputs, point_for_pin
@@ -49,10 +49,8 @@ def parse_daily(dates: list[str], lows: list[float], highs: list[float], unit: s
     df = pd.DataFrame({"tmin": _to_c(np.asarray(lows, dtype=float), unit),
                        "tmax": _to_c(np.asarray(highs, dtype=float), unit)}, index=pd.DatetimeIndex(idx))
     df = df[~df.index.duplicated(keep="last")].sort_index()
-    bad = ~((df.tmin > -30) & (df.tmax < 50) & (df.tmin <= df.tmax + 0.05))
-    if bad.mean() > 0.2:
-        raise BadRequest("many readings look wrong (low above high, or out of range); check the columns and units")
-    return df[~bad]
+    # Nothing is dropped silently here: qc_daily sets suspicious readings aside and says which and why.
+    return df[df.tmin.notna() | df.tmax.notna()]
 
 
 def parse_hourly(times: list[str], temps: list[float], unit: str) -> pd.Series:
@@ -71,7 +69,7 @@ def parse_hourly(times: list[str], temps: list[float], unit: str) -> pd.Series:
         loc = ts.tz_localize("America/Los_Angeles", ambiguous="NaT", nonexistent="NaT")
         ts = loc.tz_convert("Etc/GMT+8").tz_localize(None)
     s = pd.Series(_to_c(np.asarray(temps, dtype=float), unit), index=ts)
-    s = s[s.index.notna() & (s > -30) & (s < 50)]
+    s = s[s.index.notna() & s.notna()]
     if s.empty:
         raise BadRequest("no usable logger readings")
     # Hour-ending means, like CIMIS: readings in (12:00, 13:00] are the 13:00 hour.
@@ -106,6 +104,90 @@ def readings_error(first: date, season: int, asof: date) -> tuple[float | None, 
             "readings_from_jan1": "Jan 1"}.get(sc)
     what = f"test of readings starting {when}" if when else "station-only test"
     return round(float(v) * g, 1), f"{what} at {tests[test]['n_sites']} {label}"
+
+
+# --- Quality checks on the grower's readings --------------------------------------------------
+# Limits come from real data (METHODS.md section 4d):
+# - Of 352,065 Central Valley CIMIS station-days (Sep-Mar, 1982-2026), fewer than 1 in 10,000 had a
+#   low below -15 C (5 F) or a high above 47 C (117 F).
+# - At 18 Wildeye orchards (6,204 days), once each orchard's usual offset from the station estimate is
+#   removed, a day's low never strayed more than 7.8 C from it and a high never more than 14.8 C;
+#   single hours never more than 15.5 C. The limits below sit just outside those.
+LOW_MIN_C, HIGH_MAX_C = -15.0, 47.0
+DEV_LOW_C, DEV_HIGH_C, DEV_HOUR_C = 10.0, 15.0, 16.0
+MAX_FLAGGED_SHARE = 0.2
+SHOW_FLAGS = 20
+
+
+def _show(v_c: float, unit: str) -> float:
+    return round(v_c * 9 / 5 + 32, 1) if unit == "F" else round(v_c, 1)
+
+
+def _deviation(own: np.ndarray, est: np.ndarray, skip: np.ndarray, limit: float) -> tuple[np.ndarray, np.ndarray]:
+    """Readings further than `limit` from the station estimate, after removing the series' usual offset.
+    Returns (flag, expected value = estimate + usual offset)."""
+    r = own - est
+    ok = np.isfinite(r) & ~skip
+    off = float(np.median(r[ok])) if ok.sum() >= 3 else 0.0
+    return ok & (np.abs(r - off) > limit), est + off
+
+
+def qc_daily(df: pd.DataFrame, pin: Pin, season: int, unit: str) -> tuple[pd.DataFrame, list[dict]]:
+    """Set aside lows/highs that cannot be right; return the cleaned frame and what was set aside, why."""
+    est = pd.Series(pin.hourly[season], index=season_stamps(season))
+    emin, emax, _ = window_minmax(est, pd.DatetimeIndex(df.index), MIDNIGHT, max_missing=6)
+    lo, hi = df.tmin.to_numpy(dtype=float), df.tmax.to_numpy(dtype=float)
+    why_lo = np.full(len(df), "", dtype=object)
+    why_hi = np.full(len(df), "", dtype=object)
+    cold = np.isfinite(lo) & (lo < LOW_MIN_C)
+    why_lo[cold] = f"colder than the Central Valley gets in winter (below {_show(LOW_MIN_C, unit):g}°{unit})"
+    hot = np.isfinite(hi) & (hi > HIGH_MAX_C)
+    why_hi[hot] = f"hotter than the Central Valley gets from Sep to Mar (above {_show(HIGH_MAX_C, unit):g}°{unit})"
+    swap = np.isfinite(lo) & np.isfinite(hi) & (lo > hi + 0.5) & ~cold & ~hot
+    dlo, exp_lo = _deviation(lo, emin, cold | swap, DEV_LOW_C)
+    dhi, exp_hi = _deviation(hi, emax, hot | swap, DEV_HIGH_C)
+    # A low above its high: set aside whichever of the two is further from what nearby stations measured.
+    for i in np.flatnonzero(swap):
+        if np.isfinite(exp_lo[i]) and np.isfinite(exp_hi[i]):
+            bad_low = abs(lo[i] - exp_lo[i]) >= abs(hi[i] - exp_hi[i])
+            (why_lo if bad_low else why_hi)[i] = "the low is above the high, and this one doesn't match nearby stations"
+        else:
+            why_lo[i] = why_hi[i] = "the low is above the high"
+    tol = lambda c: f"{_show(c, 'C'):g}" if unit == "C" else f"{round(c * 9 / 5):g}"  # noqa: E731
+    why_lo[dlo] = f"more than {tol(DEV_LOW_C)}° away from what nearby stations measured that night"
+    why_hi[dhi] = f"more than {tol(DEV_HIGH_C)}° away from what nearby stations measured that day"
+    flags = []
+    for i, d in enumerate(df.index):
+        for field, val, why, exp in (("low", lo[i], why_lo[i], exp_lo[i]), ("high", hi[i], why_hi[i], exp_hi[i])):
+            if why:
+                flags.append({"when": d.strftime("%Y-%m-%d"), "field": field, "value": float(_show(val, unit)),
+                              "expected": None if not np.isfinite(exp) else float(_show(exp, unit)), "reason": str(why)})
+    out = df.copy()
+    out.loc[why_lo != "", "tmin"] = np.nan
+    out.loc[why_hi != "", "tmax"] = np.nan
+    return out, flags
+
+
+def qc_hourly(s: pd.Series, pin: Pin, season: int, unit: str) -> tuple[pd.Series, list[dict]]:
+    est = pd.Series(pin.hourly[season], index=season_stamps(season)).reindex(s.index).to_numpy(dtype=float)
+    v = s.to_numpy(dtype=float)
+    why = np.full(len(v), "", dtype=object)
+    why[np.isfinite(v) & ((v < LOW_MIN_C) | (v > HIGH_MAX_C))] = "outside the Central Valley's range"
+    dev, exp = _deviation(v, est, why != "", DEV_HOUR_C)
+    tol = f"{_show(DEV_HOUR_C, 'C'):g}" if unit == "C" else f"{round(DEV_HOUR_C * 9 / 5):g}"
+    why[dev] = f"more than {tol}° away from nearby stations that hour"
+    flags = [{"when": (t - pd.Timedelta(hours=1)).strftime("%Y-%m-%d %H:00"), "field": "reading", "value": float(_show(v[i], unit)),
+              "expected": None if not np.isfinite(exp[i]) else float(_show(exp[i], unit)), "reason": str(why[i])}
+             for i, t in enumerate(s.index) if why[i]]
+    out = s.copy()
+    out[why != ""] = np.nan
+    return out, flags
+
+
+def _check_share(flags: list[dict], n: int) -> None:
+    if n and len(flags) / n > MAX_FLAGGED_SHARE:
+        raise BadRequest(f"{len(flags)} of {n} readings don't fit what nearby stations measured. Check that the °F/°C setting "
+                         "is right and that the columns really are the daily lows and highs.")
 
 
 def _daily_hours(pin: Pin, df: pd.DataFrame, season: int) -> tuple[pd.Series, int, int]:
@@ -162,12 +244,16 @@ def orchard_point(lat: float, lon: float, crop: str, variety: str, kind: str, un
         df = df.loc[s0:s1]
         if len(df) < 3:
             raise BadRequest("need at least 3 days of readings within one winter (Sep 1 onward)")
+        df, flags = qc_daily(df, pin, season, unit)
+        _check_share(flags, 2 * len(df))
         hrs, short, long_ = _daily_hours(pin, df, season)
         first_day = df.index.min().date()
     else:
         hs = hs.loc[s0 + pd.Timedelta(hours=1):s1 + pd.Timedelta(hours=24)]
         if hs.notna().sum() < 72:
             raise BadRequest("need at least 3 days of logger readings within one winter (Sep 1 onward)")
+        hs, flags = qc_hourly(hs, pin, season, unit)
+        _check_share(flags, int(hs.notna().sum()) + len(flags))
         hrs, short, long_ = _logger_hours(hs)
         first_day = (hs.dropna().index.min() - pd.Timedelta(hours=1)).date()
 
@@ -212,5 +298,7 @@ def orchard_point(lat: float, lon: float, crop: str, variety: str, kind: str, un
         "station_estimate_cp": None if st_cp is None else round(st_cp, 2),
         "difference_cp": None if st_cp is None else round(float(out["chill"]["to_date"]) - st_cp, 2),
         "error_source": err_src,
+        "flagged": flags[:SHOW_FLAGS],
+        "flagged_count": len(flags),
     }
     return out
