@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useData } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import ErrorBoundary from "./ErrorBoundary";
+import Recommendations from "./results/Recommendations";
 import Sections from "./results/Sections";
 import Summary, { BlockCard } from "./results/Summary";
 import { Button, ErrorLine } from "./ui";
@@ -123,6 +124,9 @@ export default function PanelBody() {
                 <Summary p={point.data} />
               </ErrorBoundary>
               <BlockCard />
+              <ErrorBoundary label="Recommendations could not be shown.">
+                <Recommendations />
+              </ErrorBoundary>
               <Sections p={point.data} />
             </motion.div>
           ) : null}

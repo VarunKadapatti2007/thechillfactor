@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { getArea, getCrops, getGrid, getHeat, getHistory, getPoint, getReplay, getStations, getValidation, postOrchard } from "./api";
+import { getArea, getCrops, getGrid, getHeat, getHistory, getPoint, getReplay, getStations, getValidation, postAdvice, postOrchard } from "./api";
 import { useAsync, type AsyncState } from "./hooks";
 import { useStore } from "./store";
 import type {
+  AdviceResponse,
   AreaResponse,
   CropsResponse,
   GridResponse,
@@ -26,6 +27,7 @@ interface Data {
   validation: AsyncState<ValidationResponse>;
   grid: AsyncState<GridResponse>;
   area: AsyncState<AreaResponse>;
+  advice: AsyncState<AdviceResponse>;
   bloom: string;
   setBloom: (v: string) => void;
 }
@@ -77,6 +79,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     : null;
   const area = useAsync(() => getArea(areaQ!), areaQ ? `${r!.n}:${JSON.stringify(areaQ)}` : null);
 
+  // Recommendations follow the main answer, built by the server from this run's farm and readings.
+  const advice = useAsync<AdviceResponse>(
+    () => postAdvice(pointQ!, r!.readings!, { block_acres: r!.acres ?? null, label: r!.label }),
+    pointQ && r?.readings && point.data ? `${r!.n}:${JSON.stringify(pointQ)}:${r!.readings.sig}:${r!.acres ?? ""}` : null,
+  );
+
   const gridVariety = r?.variety ?? s.variety ?? "kerman";
   const grid = useAsync(
     () => getGrid(s.layers.grid as "safe_chill" | "chill_so_far", gridVariety),
@@ -84,8 +92,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const v = useMemo(
-    () => ({ crops, stations, point, history, replay, heat, validation, grid, area, bloom, setBloom }),
-    [crops, stations, point, history, replay, heat, validation, grid, area, bloom],
+    () => ({ crops, stations, point, history, replay, heat, validation, grid, area, advice, bloom, setBloom }),
+    [crops, stations, point, history, replay, heat, validation, grid, area, advice, bloom],
   );
   return <Ctx.Provider value={v}>{children}</Ctx.Provider>;
 }

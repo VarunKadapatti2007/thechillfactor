@@ -24,6 +24,7 @@ from ..pipeline.build_pin import _version_tag
 from ..pipeline.pins import get_pin as build_pin
 from ..products.heat import heat as heat_product
 from ..products.history import history as history_product
+from ..products.advice import advice as advice_product, farm_context
 from ..products.orchard import orchard_point
 from ..products.readings_parse import ai_available, parse_file
 from ..products.point import BadRequest, point as point_product
@@ -243,6 +244,19 @@ def orchard(req: S.OrchardRequest):
     _variety(req.crop, req.variety)
     params = {**req.model_dump(), "lat": round(req.lat, 4), "lon": round(req.lon, 4), "by": _mmdd(req.by)}
     return _cached("orchard", params, lambda: orchard_point(**params), S.OrchardResponse)
+
+
+@app.post("/api/advice")
+def advice(req: S.AdviceRequest):
+    """What to do next for this farm: its full chill picture, turned into actions by Claude Sonnet."""
+    if not (-60 <= req.lat <= 70 and -180 <= req.lon <= 180):
+        raise HTTPException(400, "lat/lon out of range")
+    _variety(req.crop, req.variety)
+    params = {**req.model_dump(), "lat": round(req.lat, 4), "lon": round(req.lon, 4), "by": _mmdd(req.by)}
+    try:
+        return JSONResponse(_clean(advice_product(farm_context(**params))))
+    except BadRequest as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/readings/parse")

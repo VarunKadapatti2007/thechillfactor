@@ -28,6 +28,7 @@ export function buildSpec(s: ReturnType<typeof useStore>["s"]): Omit<RunSpec, "n
     samplePts: samplePts && samplePts.length > 1 ? samplePts : null,
     areaLabel: samplePts && samplePts.length > 1 ? areaLabel : null,
     readings: s.readings,
+    acres: s.drawMode === "outline" && s.outlineClosed ? Math.round(polygonAreaKm2(s.outline) * 247.1) : null,
   };
 }
 

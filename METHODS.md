@@ -145,6 +145,10 @@ Daymet's daily low and high are turned into hours with a machine-learned daily c
 
 ---
 
+### 4e. What to do next (recommendations)
+
+[`engine/chillprint/products/advice.py`, `POST /api/advice`] After each run, the server rebuilds the farm's whole picture from the same inputs: this winter's chill from the grower's readings, the error bar, the odds and verdict, the readings against the station estimate and any readings set aside, the closest past winter, every winter since 1980 at the spot with its trend and safe winter chill, the sunny-stretch flag, the measured accuracy, and the daily lows and highs. Claude Sonnet (`claude-sonnet-5-5`, structured JSON output, with the API's server-side fallback) turns it into a headline, a summary, prioritized actions with timing and reasons, things to watch for, data notes and a longer-term note. The instructions limit it to the numbers given and to practices UC has documented, with no product names or rates, and to recommend checking with a farm advisor or PCA before any treatment. Answers are cached by the farm's full context, so a different farm, outline, crop or set of readings gets new advice.
+
 ## 5. Live data, around the clock
 
 [`engine/chillprint/pipeline/live_refresh.py`]

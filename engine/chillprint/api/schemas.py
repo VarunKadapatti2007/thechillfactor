@@ -198,6 +198,11 @@ class OrchardRequest(_Model):
     climate: str = "today"
 
 
+class AdviceRequest(OrchardRequest):
+    block_acres: Optional[float] = None
+    label: Optional[str] = None
+
+
 # --- /api/area (additive: chill across an orchard block) ---------------------
 
 class AreaPoint(_Model):

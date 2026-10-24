@@ -128,6 +128,25 @@ export interface OrchardResponse extends PointResponse {
   orchard: OrchardInfo;
 }
 
+export interface AdviceAction {
+  title: string;
+  when: string;
+  why: string;
+  priority: "high" | "medium" | "low";
+  category: "monitor" | "protect_chill" | "bloom" | "data" | "planning";
+}
+
+export interface AdviceResponse {
+  headline: string;
+  summary: string;
+  actions: AdviceAction[];
+  watch_for: string[];
+  data_notes: string[];
+  longer_term: string;
+  context: { season: string; as_of: string; crop: string; variety: string; chill_so_far_cp: number; verdict: string; readings_days: number };
+  model: string;
+}
+
 export interface OrchardReadingsScenario {
   mae_cp: number;
   p80_cp: number;

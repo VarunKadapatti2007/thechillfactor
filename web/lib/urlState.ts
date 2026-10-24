@@ -24,7 +24,7 @@ export function useUrlState() {
     if (crop && variety) d({ type: "crop", crop, variety });
     // A shared link with a place and a crop runs the analysis straight away.
     if (q.get("lat") && q.get("lon") && Number.isFinite(lat) && Number.isFinite(lon) && crop && variety) {
-      d({ type: "run", spec: { lat, lon, label: q.get("label") ?? undefined, crop, variety, by: null, start: "sep1", climate: null, samplePts: null, areaLabel: null, readings: null } });
+      d({ type: "run", spec: { lat, lon, label: q.get("label") ?? undefined, crop, variety, by: null, start: "sep1", climate: null, samplePts: null, areaLabel: null, readings: null, acres: null } });
     }
     // Coming back from the orchard log page: use the log as the readings.
     if (q.get("log") === "1") {

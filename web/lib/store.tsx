@@ -23,6 +23,7 @@ export interface RunSpec {
   samplePts: [number, number][] | null; // [lat, lon] across a block
   areaLabel: string | null;
   readings: Readings | null;
+  acres: number | null; // outlined block size
   n: number;
 }
 

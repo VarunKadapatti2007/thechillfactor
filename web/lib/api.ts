@@ -12,6 +12,7 @@ import type {
   GridResponse,
   HeatResponse,
   HistoryResponse,
+  AdviceResponse,
   OrchardResponse,
   PointQuery,
   Readings,
@@ -137,15 +138,42 @@ export function getPoint(q: PointQuery) {
   );
 }
 
-// The grower's own readings always go to the live API (they are never in the offline bundle).
-export async function postOrchard(q: PointQuery, rd: Readings): Promise<Result<OrchardResponse>> {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 120000);
-  const body = {
+function readingsBody(q: PointQuery, rd: Readings) {
+  return {
     lat: q.lat, lon: q.lon, crop: q.crop, variety: q.variety, kind: rd.kind, unit: rd.unit,
     ...(rd.kind === "daily" ? { dates: rd.dates, lows: rd.lows, highs: rd.highs } : { times: rd.times, temps: rd.temps }),
     ...(q.start ? { start: q.start } : {}), ...(q.by ? { by: q.by } : {}), ...(q.climate ? { climate: q.climate } : {}),
   };
+}
+
+async function postJson<T>(path: string, body: unknown, timeoutMs: number): Promise<Result<T>> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const r = await fetch(`${API_BASE}${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal,
+    });
+    if (!r.ok) {
+      let msg = `${r.status}`;
+      try { msg = ((await r.json()) as { detail?: string }).detail ?? msg; } catch {}
+      throw new Error(msg);
+    }
+    return { data: (await r.json()) as T, origin: "api" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// What to do next: the server rebuilds this farm's whole picture from the same inputs and asks Claude.
+export function postAdvice(q: PointQuery, rd: Readings, extra: { block_acres: number | null; label?: string }) {
+  return postJson<AdviceResponse>("/api/advice", { ...readingsBody(q, rd), block_acres: extra.block_acres, label: extra.label }, 150000);
+}
+
+// The grower's own readings always go to the live API (they are never in the offline bundle).
+export async function postOrchard(q: PointQuery, rd: Readings): Promise<Result<OrchardResponse>> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 120000);
+  const body = readingsBody(q, rd);
   try {
     const r = await fetch(`${API_BASE}/api/orchard`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal,
