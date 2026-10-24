@@ -189,6 +189,17 @@ export interface HeatResponse {
   method?: string;
 }
 
+// Additive endpoint: the same analysis at several points across an orchard block.
+export interface AreaResponse {
+  points: { lat: number; lon: number; elev_m: number | null; chill_to_date: number; p10: number; p50: number; p90: number; chance_low: number; level: Level; safe_chill_recent: number | null; method: string }[];
+  n_distinct_cells: number;
+  p50_range: [number, number];
+  levels: Level[];
+  same_verdict: boolean;
+  sources?: string[];
+  method?: string;
+}
+
 export interface DemoPin {
   id: string;
   label: string;

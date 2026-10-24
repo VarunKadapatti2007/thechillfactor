@@ -180,10 +180,10 @@ export default function SeasonChart({
               return (
                 <div className="rounded-[8px] border border-line bg-surface px-2.5 py-1.5 text-[12px] shadow-md">
                   <div className="font-semibold">{label(l as number)}</div>
-                  {typeof r.cur === "number" && <div className="num">This winter: {r.cur.toFixed(1)} CP</div>}
+                  {typeof r.cur === "number" && <div className="num">This winter: {r.cur.toFixed(1)} chill portions</div>}
                   {Array.isArray(r.fan) && (
                     <div className="num">
-                      Outlook: {r.fan[0].toFixed(0)} to {r.fan[1].toFixed(0)} CP
+                      Likely: {r.fan[0].toFixed(0)} to {r.fan[1].toFixed(0)} chill portions
                     </div>
                   )}
                   {Array.isArray(r.rb) && (
@@ -216,7 +216,7 @@ export default function SeasonChart({
         )}
         {fan && fan.length > 0 && (
           <li className="flex items-center gap-1">
-            <span className="inline-block h-2.5 w-4 rounded-sm" style={{ background: SERIES.fan, opacity: 0.25 }} /> Outlook, 8 in 10 range
+            <span className="inline-block h-2.5 w-4 rounded-sm" style={{ background: SERIES.fan, opacity: 0.25 }} /> Where it will likely end up
           </li>
         )}
         <li className="flex items-center gap-1">

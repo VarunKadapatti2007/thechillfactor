@@ -8,6 +8,7 @@
 import type {
   CropsResponse,
   DemoPin,
+  AreaResponse,
   GridResponse,
   HeatResponse,
   HistoryResponse,
@@ -85,10 +86,13 @@ async function nearestDemoPin(lat: number, lon: number): Promise<DemoPin | null>
   return best && bestD < 0.03 ? best : null; // ~3 km
 }
 
+// A brand-new location builds 45 winters on the server (5-10 s, longer when several run at once).
+const API_TIMEOUT_MS = 60000;
+
 async function withFallback<T>(apiUrl: string, demoPath: () => Promise<string | null>, mockName: string): Promise<Result<T>> {
   if (USE_MOCKS) return { data: await loadMock<T>(mockName), origin: "mock" };
   try {
-    return { data: await getJson<T>(apiUrl), origin: "api" };
+    return { data: await getJson<T>(apiUrl, API_TIMEOUT_MS), origin: "api" };
   } catch (err) {
     const path = await demoPath();
     if (!path) throw err instanceof Error ? err : new Error(String(err));
@@ -141,6 +145,12 @@ export function getHistory(q: { lat: number; lon: number; crop: string; variety:
     },
     "history",
   );
+}
+
+export async function getArea(q: { pts: [number, number][]; crop: string; variety: string; by?: string; start?: string; climate?: string }): Promise<Result<AreaResponse>> {
+  const pts = q.pts.map(([a, b]) => `${a.toFixed(4)},${b.toFixed(4)}`).join(";");
+  // Blocks are never in the offline bundle; this needs the live API.
+  return { data: await getJson<AreaResponse>(`${API_BASE}/api/area?${qs({ pts, crop: q.crop, variety: q.variety, by: q.by, start: q.start, climate: q.climate })}`, 120000), origin: "api" };
 }
 
 export function getHeat(q: { lat: number; lon: number; bloom: string }) {

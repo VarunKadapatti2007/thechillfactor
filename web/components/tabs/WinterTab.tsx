@@ -6,6 +6,7 @@ import { ArrowLeft, History, Pause, Play, Snowflake, Sun } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "@/lib/data";
 import { daysBetween, inTen, longDate, range, seasonShort, shortDate } from "@/lib/format";
+import { plainVerdict } from "@/lib/explain";
 import { seasonStartYear } from "@/lib/season";
 import { useStore } from "@/lib/store";
 import type { Frame, Level, PointResponse } from "@/lib/types";
@@ -18,8 +19,10 @@ const CP_INFO = "A chill unit that counts cool hours and discounts warm spells. 
 function useVarietyInfo() {
   const { s } = useStore();
   const { crops } = useData();
-  const crop = crops.data?.crops.find((c) => c.id === s.crop);
-  const v = crop?.varieties.find((x) => x.id === s.variety);
+  const cropId = s.run?.crop ?? s.crop;
+  const varId = s.run?.variety ?? s.variety;
+  const crop = crops.data?.crops.find((c) => c.id === cropId);
+  const v = crop?.varieties.find((x) => x.id === varId);
   return { crop, v };
 }
 
@@ -60,7 +63,7 @@ function Hero({ level, sentence, early, sub }: { level: Level; sentence: string;
     <motion.div key={level} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: "easeOut" }} className="space-y-2" data-coach="verdict">
       <StatusPill level={level} size="lg" />
       <p className="text-[16px] leading-snug text-ink">{sentence}</p>
-      {early && <p className="text-[12px] font-medium text-watch-ink">Early season: mostly past winters.</p>}
+      {early && <p className="text-[12px] font-medium text-watch-ink">Early in the winter: this leans mostly on past winters.</p>}
       <p className="text-[12px] text-muted">{sub}</p>
     </motion.div>
   );
@@ -205,7 +208,7 @@ function LiveView({ p }: { p: PointResponse }) {
   );
 }
 
-function ReplayView({ p }: { p: PointResponse }) {
+export function ReplayView({ p }: { p: PointResponse }) {
   const { s, d } = useStore();
   const { replay } = useData();
   const { v } = useVarietyInfo();
@@ -253,7 +256,8 @@ function ReplayView({ p }: { p: PointResponse }) {
   const mmdd = p.need.by.slice(5);
   const by = byForSeason(season, mmdd);
   const name = v?.name ?? "this variety";
-  const sentence = `${Math.round(f.chance_low * 10)} in 10 similar winters reached ${name}'s ${low} CP by ${shortDate(by)}.`;
+  const sentence = `${plainVerdict(f.level, f.chance_low, low, high)} (${inTen(f.chance_low)} past winters reached ${low} by ${shortDate(by)}.)`;
+  void name;
   const early = f.date.slice(5) < "11-15" && f.date.slice(5) >= "09-01";
   const own = p.past_seasons.find((x) => x.season === season)?.series ?? (p.season === season ? p.chill.series : []);
   const cut = own.filter((x) => x.date <= f.date);
@@ -265,25 +269,23 @@ function ReplayView({ p }: { p: PointResponse }) {
         <History size={15} aria-hidden className="text-brand" />
         <span className="font-medium">Replaying winter {seasonShort(season)}</span>
         <Button className="ml-auto h-8 min-h-8 px-2 text-[12px]" onClick={() => d({ type: "replay", season: null })}>
-          <ArrowLeft size={13} aria-hidden /> This winter
+          <ArrowLeft size={13} aria-hidden /> Close replay
         </Button>
       </div>
       <Section title={`As of ${longDate(f.date)}`}>
-        <Hero level={f.level} sentence={sentence} early={early} sub={`Likely by ${shortDate(by)}: ${range(Math.round(f.p10), Math.round(f.p90))} CP`} />
+        <Hero level={f.level} sentence={sentence} early={early} sub={`Expected by ${shortDate(by)}: probably ${range(Math.round(f.p10), Math.round(f.p90))} chill portions.`} />
         <div className="mt-4 flex items-center gap-3">
           <RingGauge value={f.cp} low={low} high={high} instant />
           <div className="grid min-w-0 flex-1 grid-cols-1 gap-2">
-            <Tile label="Chill so far" value={`${f.cp.toFixed(0)} CP`} info={CP_INFO} />
-            <Tile label="Need" value={`${range(low, high)} by ${shortDate(by)}`} />
+            <Tile label="Chill so far that day" value={`${f.cp.toFixed(0)} of ${range(low, high)}`} info={CP_INFO} />
             <Tile
-              label="What happened"
-              value={!done ? "Shown at the end" : replay.data.actual_final_cp !== null ? `${replay.data.actual_final_cp.toFixed(0)} CP` : "Not available"}
-              sub={`by ${shortDate(by)}`}
+              label={`What actually happened by ${shortDate(by)}`}
+              value={!done ? "Shown when the replay ends" : replay.data.actual_final_cp !== null ? `${replay.data.actual_final_cp.toFixed(0)} chill portions` : "Not available"}
             />
           </div>
         </div>
       </Section>
-      <Section title="Season chart">
+      <Section title="How the season built up">
         <SeasonChart
           season={season}
           current={cut}

@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { getCrops, getGrid, getHeat, getHistory, getPoint, getReplay, getStations, getValidation } from "./api";
+import { getArea, getCrops, getGrid, getHeat, getHistory, getPoint, getReplay, getStations, getValidation } from "./api";
 import { useAsync, type AsyncState } from "./hooks";
 import { useStore } from "./store";
 import type {
+  AreaResponse,
   CropsResponse,
   GridResponse,
   HeatResponse,
@@ -24,55 +25,63 @@ interface Data {
   heat: AsyncState<HeatResponse>;
   validation: AsyncState<ValidationResponse>;
   grid: AsyncState<GridResponse>;
+  area: AsyncState<AreaResponse>;
   bloom: string;
   setBloom: (v: string) => void;
 }
 
 const Ctx = createContext<Data | null>(null);
 
+// Everything below "run" is fetched only after the grower presses Run analysis, from the frozen inputs.
 export function DataProvider({ children }: { children: ReactNode }) {
   const { s } = useStore();
   const [bloom, setBloom] = useState("02-20");
-  const pinKey = s.pin ? `${s.pin.lat.toFixed(4)},${s.pin.lon.toFixed(4)}` : null;
-  const ready = pinKey && s.crop && s.variety;
+  const r = s.run;
 
   const crops = useAsync(getCrops, "crops");
   const stations = useAsync(getStations, "stations");
   const validation = useAsync(getValidation, "validation");
 
-  const pointQ = ready
+  const pointQ = r
     ? {
-        lat: s.pin!.lat,
-        lon: s.pin!.lon,
-        crop: s.crop!,
-        variety: s.variety!,
-        start: s.start === "sep1" ? undefined : s.start,
-        by: s.byOverride ?? undefined,
-        climate: s.climate ?? undefined,
+        lat: r.lat,
+        lon: r.lon,
+        crop: r.crop,
+        variety: r.variety,
+        start: r.start === "sep1" ? undefined : r.start,
+        by: r.by ?? undefined,
+        climate: r.climate ?? undefined,
       }
     : null;
-  const point = useAsync(() => getPoint(pointQ!), pointQ ? JSON.stringify(pointQ) : null);
+  const point = useAsync(() => getPoint(pointQ!), pointQ ? `${r!.n}:${JSON.stringify(pointQ)}` : null);
 
-  const histQ = ready ? { lat: s.pin!.lat, lon: s.pin!.lon, crop: s.crop!, variety: s.variety!, by: s.byOverride ?? undefined } : null;
-  const history = useAsync(() => getHistory(histQ!), histQ && s.tab === "history" ? JSON.stringify(histQ) : null);
+  const histQ = r ? { lat: r.lat, lon: r.lon, crop: r.crop, variety: r.variety, by: r.by ?? undefined } : null;
+  // Secondary sections load after the main answer so they never slow it down.
+  const history = useAsync(() => getHistory(histQ!), histQ && point.data ? JSON.stringify(histQ) : null);
 
-  const repQ = ready && s.replaySeason
-    ? { lat: s.pin!.lat, lon: s.pin!.lon, crop: s.crop!, variety: s.variety!, season: s.replaySeason, ...(s.climate ? { climate: s.climate } : {}) }
+  const repQ = r && s.replaySeason
+    ? { lat: r.lat, lon: r.lon, crop: r.crop, variety: r.variety, season: s.replaySeason, ...(r.climate ? { climate: r.climate } : {}) }
     : null;
   const replay = useAsync(() => getReplay(repQ!), repQ ? JSON.stringify(repQ) : null);
 
-  const heatQ = pinKey ? { lat: s.pin!.lat, lon: s.pin!.lon, bloom } : null;
-  const heat = useAsync(() => getHeat(heatQ!), heatQ && s.tab === "heat" ? JSON.stringify(heatQ) : null);
+  const heatQ = r ? { lat: r.lat, lon: r.lon, bloom } : null;
+  const heat = useAsync(() => getHeat(heatQ!), heatQ && point.data ? JSON.stringify(heatQ) : null);
 
-  const gridVariety = s.variety ?? "kerman";
+  // The block check starts after the main answer, so the two do not compete on the server.
+  const areaQ = r && r.samplePts && r.samplePts.length > 1 && point.data
+    ? { pts: r.samplePts, crop: r.crop, variety: r.variety, by: r.by ?? undefined, start: r.start === "sep1" ? undefined : r.start, climate: r.climate ?? undefined }
+    : null;
+  const area = useAsync(() => getArea(areaQ!), areaQ ? `${r!.n}:${JSON.stringify(areaQ)}` : null);
+
+  const gridVariety = r?.variety ?? s.variety ?? "kerman";
   const grid = useAsync(
     () => getGrid(s.layers.grid as "safe_chill" | "chill_so_far", gridVariety),
     s.layers.grid === "off" ? null : `${s.layers.grid}:${gridVariety}`,
   );
 
   const v = useMemo(
-    () => ({ crops, stations, point, history, replay, heat, validation, grid, bloom, setBloom }),
-    [crops, stations, point, history, replay, heat, validation, grid, bloom],
+    () => ({ crops, stations, point, history, replay, heat, validation, grid, area, bloom, setBloom }),
+    [crops, stations, point, history, replay, heat, validation, grid, area, bloom],
   );
   return <Ctx.Provider value={v}>{children}</Ctx.Provider>;
 }

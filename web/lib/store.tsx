@@ -8,6 +8,23 @@ export type Tab = "winter" | "history" | "heat" | "accuracy";
 export type GridLayer = "off" | "safe_chill" | "chill_so_far";
 export type SheetSnap = "peek" | "half" | "full";
 
+export type DrawMode = "pin" | "circle" | "outline";
+
+// Inputs frozen when the grower presses "Run analysis"; results always describe this snapshot.
+export interface RunSpec {
+  lat: number;
+  lon: number;
+  label?: string;
+  crop: string;
+  variety: string;
+  by: string | null;
+  start: StartOpt;
+  climate: ClimateOpt | null;
+  samplePts: [number, number][] | null; // [lat, lon] across a block
+  areaLabel: string | null;
+  n: number;
+}
+
 export interface Pin {
   lat: number;
   lon: number;
@@ -29,6 +46,11 @@ export interface AppState {
   sheet: SheetSnap;
   flyTo: { lat: number; lon: number; zoom: number; n: number } | null;
   coach: number | null; // onboarding step 0..2, null = hidden
+  drawMode: DrawMode;
+  radiusKm: number;
+  outline: [number, number][]; // [lon, lat]
+  outlineClosed: boolean;
+  run: RunSpec | null;
 }
 
 export type Action =
@@ -44,7 +66,14 @@ export type Action =
   | { type: "highlight"; season: string | null }
   | { type: "layers"; layers: Partial<AppState["layers"]> }
   | { type: "sheet"; sheet: SheetSnap }
-  | { type: "coach"; step: number | null };
+  | { type: "coach"; step: number | null }
+  | { type: "drawMode"; mode: DrawMode }
+  | { type: "radius"; km: number }
+  | { type: "outlineAdd"; lon: number; lat: number }
+  | { type: "outlineClose" }
+  | { type: "outlineClear" }
+  | { type: "run"; spec: Omit<RunSpec, "n"> }
+  | { type: "resetRun" };
 
 const initial: AppState = {
   pin: null,
@@ -61,6 +90,11 @@ const initial: AppState = {
   sheet: "peek",
   flyTo: null,
   coach: null,
+  drawMode: "pin",
+  radiusKm: 1,
+  outline: [],
+  outlineClosed: false,
+  run: null,
 };
 
 function reducer(s: AppState, a: Action): AppState {
@@ -98,7 +132,42 @@ function reducer(s: AppState, a: Action): AppState {
       return { ...s, sheet: a.sheet };
     case "coach":
       return { ...s, coach: a.step };
+    case "drawMode":
+      return { ...s, drawMode: a.mode, outline: [], outlineClosed: false };
+    case "radius":
+      return { ...s, radiusKm: a.km };
+    case "outlineAdd": {
+      if (s.outlineClosed) return s;
+      const outline = [...s.outline, [a.lon, a.lat] as [number, number]];
+      return { ...s, outline, pin: s.pin ?? { lat: a.lat, lon: a.lon } };
+    }
+    case "outlineClose": {
+      if (s.outline.length < 3) return s;
+      const c = centroid(s.outline);
+      return { ...s, outlineClosed: true, pin: { lat: c[1], lon: c[0], label: "Your outlined block" } };
+    }
+    case "outlineClear":
+      return { ...s, outline: [], outlineClosed: false };
+    case "run":
+      return { ...s, run: { ...a.spec, n: (s.run?.n ?? 0) + 1 }, replaySeason: null, sheet: s.sheet === "peek" ? "half" : s.sheet };
+    case "resetRun":
+      return { ...s, run: null, replaySeason: null };
   }
+}
+
+export function centroid(pts: [number, number][]): [number, number] {
+  // Area-weighted polygon centroid (lon, lat); falls back to the vertex mean for degenerate shapes.
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[(i + 1) % pts.length];
+    const f = x0 * y1 - x1 * y0;
+    a += f;
+    cx += (x0 + x1) * f;
+    cy += (y0 + y1) * f;
+  }
+  if (Math.abs(a) < 1e-12) return [pts.reduce((t, p) => t + p[0], 0) / pts.length, pts.reduce((t, p) => t + p[1], 0) / pts.length];
+  return [cx / (3 * a), cy / (3 * a)];
 }
 
 const Ctx = createContext<{ s: AppState; d: Dispatch<Action> } | null>(null);

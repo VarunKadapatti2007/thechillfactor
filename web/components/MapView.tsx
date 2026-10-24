@@ -6,6 +6,7 @@ import { Layers } from "lucide-react";
 import { setWorkerUrl, type StyleSpecification } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Map, { Layer, Marker, NavigationControl, Popup, Source, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
+import { circlePolygon } from "@/lib/area";
 import { useData } from "@/lib/data";
 import { useStore, type GridLayer } from "@/lib/store";
 import { cn } from "./ui";
@@ -104,8 +105,27 @@ export default function MapView() {
   const showErrors = s.tab === "accuracy" && errGeo.features.length > 0;
 
   function onClick(e: MapLayerMouseEvent) {
+    if (s.drawMode === "outline") {
+      if (!s.outlineClosed) d({ type: "outlineAdd", lon: e.lngLat.lng, lat: e.lngLat.lat });
+      return;
+    }
     d({ type: "pin", pin: { lat: e.lngLat.lat, lon: e.lngLat.lng } });
   }
+
+  const shapeGeo = useMemo(() => {
+    const features: GeoJSON.Feature[] = [];
+    if (s.drawMode === "circle" && s.pin) {
+      features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circlePolygon(s.pin.lat, s.pin.lon, s.radiusKm)] } });
+    }
+    if (s.drawMode === "outline" && s.outline.length) {
+      const ring = s.outlineClosed ? [...s.outline, s.outline[0]] : s.outline;
+      if (s.outlineClosed) features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } });
+      else if (ring.length > 1) features.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: ring } });
+      for (const v of s.outline) features.push({ type: "Feature", properties: { vertex: 1 }, geometry: { type: "Point", coordinates: v } });
+    }
+    return { type: "FeatureCollection" as const, features };
+  }, [s.drawMode, s.pin, s.radiusKm, s.outline, s.outlineClosed]);
+  const showPin = s.pin && (s.drawMode !== "outline" || s.outlineClosed);
 
   function onMove(e: MapLayerMouseEvent) {
     const f = e.features?.[0];
@@ -142,7 +162,7 @@ export default function MapView() {
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         interactiveLayerIds={["st-cimis", "st-wildeye", ...(showErrors ? ["err"] : []), ...(s.layers.grid !== "off" ? ["grid"] : [])]}
-        cursor="crosshair"
+        cursor={s.drawMode === "outline" && !s.outlineClosed ? "copy" : "crosshair"}
         attributionControl={{ compact: true }}
         maxZoom={style === OFFLINE_STYLE ? 9 : 14}
         minZoom={4}
@@ -206,6 +226,12 @@ export default function MapView() {
           </Source>
         )}
 
+        <Source id="shape" type="geojson" data={shapeGeo}>
+          <Layer id="shape-fill" type="fill" filter={["==", ["geometry-type"], "Polygon"]} paint={{ "fill-color": "#2e6a4f", "fill-opacity": 0.12 }} />
+          <Layer id="shape-line" type="line" filter={["!=", ["geometry-type"], "Point"]} paint={{ "line-color": "#2e6a4f", "line-width": 2, "line-dasharray": [2, 1] }} />
+          <Layer id="shape-vertex" type="circle" filter={["==", ["geometry-type"], "Point"]} paint={{ "circle-radius": 5, "circle-color": "#ffffff", "circle-stroke-color": "#2e6a4f", "circle-stroke-width": 2 }} />
+        </Source>
+
         {durham && s.layers.cimis && (
           <Marker latitude={durham.lat} longitude={durham.lon} anchor="left" offset={[8, 0]}>
             <span className="pointer-events-none whitespace-nowrap rounded bg-surface/90 px-1.5 py-0.5 text-[11px] font-medium text-ink shadow-sm">
@@ -214,7 +240,7 @@ export default function MapView() {
           </Marker>
         )}
 
-        {s.pin && (
+        {showPin && s.pin && (
           <Marker
             latitude={s.pin.lat}
             longitude={s.pin.lon}

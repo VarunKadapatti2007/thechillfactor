@@ -100,6 +100,13 @@ if (stepsFile) {
       }
       console.log("waitFor", s.waitFor.slice(0, 80), ok ? `ok ${Date.now() - t0}ms` : "TIMEOUT");
     }
+    if (s.mouse) {
+      const [x, y] = s.mouse;
+      for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) {
+        await send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 });
+      }
+      await sleep(250);
+    }
     if (s.eval) console.log("eval ->", JSON.stringify(await evaluate(s.eval)).slice(0, 2000));
     if (s.wait) await sleep(s.wait);
     if (s.shot) await shot(s.shot);

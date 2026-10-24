@@ -145,6 +145,32 @@ class PointResponse(_Model):
     sources: list[str]
 
 
+# --- /api/area (additive: chill across an orchard block) ---------------------
+
+class AreaPoint(_Model):
+    lat: float
+    lon: float
+    elev_m: Optional[float]
+    chill_to_date: float
+    p10: float
+    p50: float
+    p90: float
+    chance_low: float
+    level: Literal["green", "amber", "red"]
+    safe_chill_recent: Optional[float]
+    method: str
+
+
+class AreaResponse(_Model):
+    points: list[AreaPoint]
+    n_distinct_cells: int
+    p50_range: list[float]
+    levels: list[str]
+    same_verdict: bool
+    sources: list[str]
+    method: str
+
+
 # --- /api/history -----------------------------------------------------------
 
 class Winter(_Model):

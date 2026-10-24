@@ -37,7 +37,7 @@ export default function RingGauge({ value, low, high, size = 120, instant = fals
         <span className="text-[28px] font-semibold leading-none">
           {reduce ? <span className="num">{value.toFixed(0)}</span> : <CountUp value={value} />}
         </span>
-        <span className="mt-1 text-[11px] text-muted">CP so far</span>
+        <span className="mt-1 text-center text-[11px] leading-tight text-muted">chill portions<br />so far</span>
       </div>
     </div>
   );

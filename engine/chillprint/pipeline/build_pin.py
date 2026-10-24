@@ -27,7 +27,7 @@ from . import station_hourly as SH
 
 PIN_DIR = C.PROCESSED_DIR / "pins"
 PIN_DIR.mkdir(parents=True, exist_ok=True)
-VERSION = 5
+VERSION = 6
 # Default history and live method, chosen by the hidden-station test (validation/REPORT.md):
 # E4 = nearest station with a complete record that winter + Daymet monthly offset.
 HISTORY_METHOD = "E4"
@@ -143,12 +143,15 @@ def rebuild_record(lat, lon, pin_daily, win: Window, exclude=(), k: int = 5):
     return lin, pd.Series(-1, index=d.index)
 
 
-def _fallback_record(lat: float, pin_daily: pd.DataFrame) -> tuple[pd.Series, str]:
-    """Hours for winters without a complete station record."""
+def _fallback_season(lat: float, pin_daily: pd.DataFrame, y: int) -> tuple[np.ndarray, str]:
+    """Hours for one winter without a complete station record (only that winter is computed)."""
     from ..science import ml_shape
+    d = pin_daily.loc[pd.Timestamp(y, 8, 28):pd.Timestamp(y + 1, 4, 4)]
     if FALLBACK_METHOD == "ML" and ml_shape.available():
-        return ml_shape.ml_hours(lat, pin_daily, SH.window_for("daymet")), "Daymet + ML shape"
-    return linvill_series(lat, pin_daily[["tmin", "tmax"]].interpolate(limit_direction="both")), "E2"
+        s, label = ml_shape.ml_hours(lat, d, SH.window_for("daymet")), "Daymet + ML shape"
+    else:
+        s, label = linvill_series(lat, d[["tmin", "tmax"]].interpolate(limit_direction="both")), "E2"
+    return s.reindex(season_stamps(y)).interpolate(limit_direction="both").to_numpy().copy(), label
 
 
 @lru_cache(maxsize=4096)
@@ -180,11 +183,12 @@ def e4_hours_fast(sid: str, y: int, off: pd.DataFrame) -> np.ndarray:
     return out
 
 
-def season_e4(lat, lon, pin_daily, y: int, offsets: dict) -> tuple[np.ndarray, str, float] | None:
+def season_e4(lat, lon, pin_daily, y: int, offsets: dict, near: pd.DataFrame | None = None) -> tuple[np.ndarray, str, float] | None:
     """E4 for one complete winter: nearest station with >= 95% of hours that winter, plus the
     Daymet monthly pin-minus-station offset. Returns (hours, label, distance km) or None."""
     comp = SH.complete_seasons()
-    near = SH.nearest_cimis(lat, lon, with_hourly=True, k=40)
+    if near is None:
+        near = SH.nearest_cimis(lat, lon, with_hourly=True, k=40)
     for s in near.itertuples():
         if y not in comp.get(s.id, ()):
             continue
@@ -285,10 +289,10 @@ def build_pin(lat: float, lon: float, today: date | None = None) -> Pin:
     near = SH.nearest_cimis(lat, lon, k=3)
     hourly, method, filled, share = {}, {}, {}, {}
     offsets: dict = {}
-    rec = None
     y25 = C.LAST_COMPLETE_DAYMET_SEASON + 1
+    near40 = SH.nearest_cimis(lat, lon, with_hourly=True, k=40)
     for y in range(C.FIRST_SEASON, y25 + 1):
-        e4 = season_e4(lat, lon, pin_daily, y, offsets)
+        e4 = season_e4(lat, lon, pin_daily, y, offsets, near40)
         if e4 is not None:
             hourly[y], method[y], filled[y], share[y] = e4[0], e4[1], False, 1.0
             continue
@@ -297,9 +301,7 @@ def build_pin(lat: float, lon: float, today: date | None = None) -> Pin:
         # Dec 2025, so 2025-26 is only available through E4.
         if y >= y25:
             continue
-        if rec is None:
-            rec, fb_label = _fallback_record(lat, pin_daily)
-        arr = rec.reindex(season_stamps(y)).interpolate(limit_direction="both").to_numpy().copy()
+        arr, fb_label = _fallback_season(lat, pin_daily, y)
         if not np.isnan(arr).all():
             hourly[y], method[y], filled[y], share[y] = arr, f"{fb_label} (no station record that winter)", True, 0.0
     live_until = None

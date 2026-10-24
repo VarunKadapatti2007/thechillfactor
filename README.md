@@ -122,12 +122,12 @@ Shareable links work too, e.g. `http://localhost:3000/?lat=39.63&lon=-121.8&crop
 
 ## Demo script (90 seconds)
 
-1. Open the app; the coach marks appear.
-2. Tap "Durham, Butte Co." The map flies to the pin and shows the closed-station label.
-3. Pick Kerman pistachio. Read the verdict card.
-4. Press Play on the 2014-15 replay; watch the verdict and odds update as the season runs. (2014-15 was short of chill in southern Kern: FNRIC shows Arvin-Edison at 49 CP by Mar 1, below Kerman's 54. Drop a pin near Arvin to show a red winter.)
-5. Open Land history: at Durham, "Met Kerman's need in 43 of 43 winters" with a station record, no clear trend (-0.7 CP per decade).
-6. Open Accuracy: our miss versus the nearest station's miss, the Wildeye result, and the data-diet slider.
+1. Open the app. Step 1 asks "Where is your orchard?": tap **Durham, Butte Co.** (or Locate me, search, or tap the map; Circle or Draw outline marks a whole block).
+2. Step 2: pick **Pistachio**, variety **Kerman**. One sentence explains the need (54 to 58 chill portions by March 1) and links to the UC source.
+3. Press **Run analysis** and watch the steps; read the answer at the top: the verdict in a sentence, chill so far, what to expect by March 1, and the odds.
+4. Open **Replay a past winter**, pick 2014-15 and press Play: the verdict and odds update day by day.
+5. Open **Every winter here since 1980**: at Durham, "Met Kerman's need in 43 of 43 winters" with a station record, no clear trend.
+6. Open **How accurate is this?**: our miss versus the nearest station's, the in-orchard (Wildeye) result, and the data-gaps slider.
 
 ## How FNRIC could embed it
 

@@ -1,9 +1,8 @@
 "use client";
 
-import { CircleHelp } from "lucide-react";
 import { useStore } from "@/lib/store";
-import SearchBox from "./SearchBox";
-import { IconButton, cn } from "./ui";
+import HowItWorks from "./HowItWorks";
+import { cn } from "./ui";
 
 export default function Header() {
   const { s, d } = useStore();
@@ -14,9 +13,6 @@ export default function Header() {
         <p className="mt-0.5 hidden text-[12px] leading-none text-muted md:block">Chill for your orchard, not the nearest station</p>
       </div>
       <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
-        <div className="hidden min-w-0 flex-1 justify-end sm:flex">
-          <SearchBox />
-        </div>
         <div role="group" aria-label="Temperature units" className="flex shrink-0 rounded-[8px] border border-line p-0.5">
           {(["F", "C"] as const).map((u) => (
             <button
@@ -32,9 +28,7 @@ export default function Header() {
             </button>
           ))}
         </div>
-        <IconButton label="Show me how" onClick={() => d({ type: "coach", step: 0 })}>
-          <CircleHelp size={18} aria-hidden />
-        </IconButton>
+        <HowItWorks />
       </div>
     </header>
   );

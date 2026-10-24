@@ -22,7 +22,7 @@ export default function HistoryTab() {
   const { s } = useStore();
   const { history, crops } = useData();
   const [table, setTable] = useState(false);
-  const v = crops.data?.crops.find((c) => c.id === s.crop)?.varieties.find((x) => x.id === s.variety);
+  const v = crops.data?.crops.find((c) => c.id === (s.run?.crop ?? s.crop))?.varieties.find((x) => x.id === (s.run?.variety ?? s.variety));
 
   const rows = useMemo(() => {
     const h = history.data;
@@ -56,7 +56,7 @@ export default function HistoryTab() {
     <div>
       <Section
         title={`Met ${v.name}'s need in ${nMet} of ${complete.length} winters`}
-        sentence={`Chill portions by ${mmddLabel(s.byOverride ?? v.by_date_default)} at this pin, every winter since ${seasonShort(h.winters[0].season)}.`}
+        sentence={`Chill portions by ${mmddLabel(s.run?.by ?? s.byOverride ?? v.by_date_default)} at this pin, every winter since ${seasonShort(h.winters[0].season)}.`}
         info="Each winter uses the nearest station with a complete record, shifted to this pin by the Daymet 1 km monthly difference (the best method in our hidden-station test). Faded winters had no station record and are estimated from Daymet with a machine-learned daily curve (validated, 3.5 CP typical miss)."
       >
         <ResponsiveContainer width="100%" height={220}>

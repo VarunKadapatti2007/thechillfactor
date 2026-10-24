@@ -29,6 +29,25 @@ from ..products.replay import replay as replay_product
 from . import schemas as S
 
 app = FastAPI(title="ChillPrint API", version="0.1")
+
+
+def _warm() -> None:
+    """Load the ML curve and compile the numba kernels once at start, so no grower's request pays for it."""
+    try:
+        import numpy as np
+        from ..science import chill, ml_shape
+        if ml_shape.available():
+            ml_shape._booster()
+        chill.dynamic_portions(np.full(48, 5.0))
+        chill.dynamic_batch_cumulative(np.full((2, 48), 5.0), state=(0.0, 0.0))
+        chill.dynamic_with_day_states(np.full(48, 5.0))
+    except Exception:
+        pass
+
+
+import threading  # noqa: E402
+
+threading.Thread(target=_warm, daemon=True).start()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
 CACHE = C.PROCESSED_DIR / "api_cache"
@@ -162,6 +181,51 @@ def replay(lat: float = Query(..., ge=-60, le=70), lon: float = Query(..., ge=-1
         return replay_product(pin, y, v.need_low, v.need_high, by_mmdd, climate)
 
     return _cached("replay", params, build, S.ReplayResponse)
+
+
+@app.get("/api/area")
+def area(pts: str = Query(..., description="lat,lon;lat,lon;... up to 9 points across a block"),
+         crop: str = "pistachio", variety: str = "kerman", by: str | None = None, start: str = "sep1",
+         climate: str | None = None):
+    """Chill across an orchard block: the same analysis at up to 9 points (Daymet cells are 1 km,
+    so points closer than that share a cell)."""
+    _, v = _variety(crop, variety)
+    try:
+        points = [tuple(float(x) for x in p.split(",")) for p in pts.split(";") if p.strip()][:9]
+    except ValueError:
+        raise HTTPException(400, "pts must look like lat,lon;lat,lon")
+    if not points:
+        raise HTTPException(400, "no points")
+    climate = climate or C.default_climate()
+    by_mmdd = _mmdd(by)
+    params = dict(pts=[(round(a, 4), round(b, 4)) for a, b in points], crop=crop, variety=variety, by=by_mmdd,
+                  start=start, climate=climate)
+
+    def one(pt):
+        r = point_product(pt[0], pt[1], crop, variety, start=start, by=by_mmdd, climate=climate)
+        pin = build_pin(pt[0], pt[1])
+        try:
+            h = history_product(pin, v.need_low, v.need_high, by_mmdd or v.by_date_default, start)
+            safe = h["safe_chill"]["recent"]["p10"]
+        except Exception:
+            safe = None
+        o = r["outlook"]
+        return {"lat": pt[0], "lon": pt[1], "elev_m": r["location"]["elev_m"], "chill_to_date": r["chill"]["to_date"],
+                "p10": o["p10"], "p50": o["p50"], "p90": o["p90"], "chance_low": o["chance_low"],
+                "level": r["verdict"]["level"], "safe_chill_recent": safe, "method": r["method"]}
+
+    def build():
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            rows = list(ex.map(one, params["pts"]))
+        cells = {(round(r["lat"] / 0.009), round(r["lon"] / 0.011)) for r in rows}
+        p50s = [r["p50"] for r in rows]
+        levels = sorted({r["level"] for r in rows})
+        return {"points": rows, "n_distinct_cells": len(cells), "p50_range": [round(min(p50s), 1), round(max(p50s), 1)],
+                "levels": levels, "same_verdict": len(levels) == 1,
+                "sources": [C.SOURCES["cimis"], C.SOURCES["daymet"]], "method": "E4 at each point"}
+
+    return _cached("area", params, build, S.AreaResponse)
 
 
 @app.get("/api/heat")
