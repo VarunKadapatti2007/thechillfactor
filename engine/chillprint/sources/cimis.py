@@ -33,6 +33,7 @@ LY_PER_DAY_TO_WM2 = 0.4843
 QC_KEEP = {"", " ", "Y", "P"}
 
 _last_call = {"t": 0.0}
+LIVE_EVERY_H = 3  # the current month is re-pulled at most once per 3-hour block
 
 
 USER_AGENT = "ChillPrint/1.0 (orchard chill estimates for California growers; UC Davis Unite Ideas)"
@@ -80,6 +81,12 @@ def month_key(nbr: int, year: int, month: int, items: str = "hlyE3") -> str:
     return f"{items}_{nbr}_{year:04d}-{month:02d}"
 
 
+def live_block() -> str:
+    """Today's date and 3-hour block, e.g. 2026-10-24_09h: the cache scope for still-growing data."""
+    now = datetime.now()
+    return f"{now:%Y-%m-%d}_{now.hour // LIVE_EVERY_H * LIVE_EVERY_H:02d}h"
+
+
 def fetch_month_raw(nbr: int, year: int, month: int, live: bool = False) -> bytes:
     """Raw JSON for one station-month of hourly data (cached).
 
@@ -88,7 +95,7 @@ def fetch_month_raw(nbr: int, year: int, month: int, live: bool = False) -> byte
     """
     key = month_key(nbr, year, month)
     if live:
-        key += f"_asof{date.today()}"
+        key += f"_asof{live_block()}"
     if cache.has(SRC, key):
         return cache.read(SRC, key)
     k = cimis_key()

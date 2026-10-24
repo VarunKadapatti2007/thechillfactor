@@ -43,7 +43,7 @@ The engine reproduces FNRIC's own numbers exactly: on Davis CIMIS hourly over th
 
 **What did not work, said plainly:** the textbook plan was Daymet daily + a borrowed station shape (E3). On hidden stations it misses by more than simply using the nearest station (4.9 vs 3.9 CP), because Daymet runs warm at night at these irrigated, cold-air-pooling sites. The borrowed shape itself is fine: given the orchard's own daily low and high it is the best method we tested (1.6 CP). So the default became E4.
 
-**Is the gap closed?** Not by public data alone. No method built on the public station network gets much below about 3.5 CP at an orchard; a 731-station in-orchard study found the same floor. Local data breaks through it, so the app takes the grower's own thermometer or logger readings (optional step 3). The scientific review, tests and sources are in [RESEARCH.md](RESEARCH.md).
+**Is the gap closed?** Not by public data alone. No method built on the public station network gets much below about 3.5 CP at an orchard; a 731-station in-orchard study found the same floor. Local data breaks through it, so the app takes the grower's own thermometer or logger readings (optional step 3). The scientific review, tests and sources are in [RESEARCH.md](RESEARCH.md); every formula, and why daily lows and highs cut the error, is in [METHODS.md](METHODS.md).
 
 ## Validation
 
@@ -126,7 +126,7 @@ Shareable links work too, e.g. `http://localhost:3000/?lat=39.63&lon=-121.8&crop
 
 ### Hosted (Firebase Hosting + Cloud Run)
 
-The web app is a static export on Firebase Hosting; `/api/**` is rewritten to the `chillprint-api` Cloud Run service (us-west1), which serves the same real data. The CIMIS key goes to Cloud Run as an environment variable, never into the image or the web bundle. With `CHILLPRINT_LIVE_REFRESH=1` the server re-pulls this month's CIMIS hours for every Central Valley station at start and every 6 hours. If CIMIS's firewall rejects a request, the server keeps the data it has and reports the error at `/api/health`.
+The web app is a static export on Firebase Hosting; `/api/**` is rewritten to the `chillprint-api` Cloud Run service (us-west1), which serves the same real data. The CIMIS key goes to Cloud Run as an environment variable, never into the image or the web bundle. With `CHILLPRINT_LIVE_REFRESH=1` the server re-pulls this month's CIMIS hours for every Central Valley station at start and every 3 hours. If CIMIS refuses, the rest of that cycle uses FNRIC's relay of the same CIMIS readings; `/api/health` reports the sources, the latest hour and its age. Put only the 32-character key in `.env` (the engine ignores anything after it).
 
 ```bash
 engine/.venv/Scripts/python scripts/stage_api_data.py          # real data the API needs -> engine/deploy_data

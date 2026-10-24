@@ -193,25 +193,35 @@ def hourly_path(sid: str, season: int):
     return HOURLY_DIR / f"station={sid}" / f"season={season}.parquet"
 
 
-def pull_station_season(s, season: int, today: date) -> dict:
-    """Pull (or read from cache) one station-season and write its parquet. Returns QC counts."""
+def pull_station_season(s, season: int, today: date, cimis_ok: bool = True) -> dict:
+    """Pull (or read from cache) one station-season and write its parquet. Returns QC counts and sources.
+
+    If CIMIS refuses the still-growing month (or `cimis_ok` is False because it refused earlier in this
+    refresh), the same CIMIS hours come from FNRIC's relay; Synoptic is the last resort."""
     frames, qc_counts = [], {"t_c": 0, "srad": 0, "rh": 0, "t_c_phys": 0}
+    sources, rejected = set(), False
     for (y, m) in season_months(season):
         if date(y, m, 1) >= today:
             continue
         live = (y, m) == (today.year, today.month)
         try:
+            if live and not cimis_ok:
+                raise cimis.Rejected("CIMIS refused earlier in this refresh")
             raw = cimis.fetch_month_raw(int(s.nbr), y, m, live=live)
             df = cimis.parse_month(raw)
             src = "cimis"
-        except Exception as e:  # CIMIS refused or failed: try the Synoptic backup if configured
-            df, src = _synoptic_month(s, y, m), "synoptic"
+        except Exception as e:  # CIMIS refused or failed: FNRIC's relay of the same hours, then Synoptic
+            rejected = rejected or isinstance(e, cimis.Rejected)
+            df, src = (_fnric_live_month(s, y, m, season), "cimis_via_fnric") if live else (None, "")
+            if df is None:
+                df, src = _synoptic_month(s, y, m), "synoptic"
             if df is None:
                 raise
-            print(f"  {s.id} {y}-{m:02d}: CIMIS failed ({str(e)[:80]}); used Synoptic", file=sys.stderr)
+            print(f"  {s.id} {y}-{m:02d}: CIMIS failed ({str(e)[:80]}); used {src}", file=sys.stderr)
         if df.empty:
             continue
-        if src == "cimis":
+        sources.add(src)
+        if src in ("cimis", "cimis_via_fnric"):
             df, cnt = cimis.apply_qc(df)
             for k, v in cnt.items():
                 qc_counts[k] += v
@@ -226,7 +236,38 @@ def pull_station_season(s, season: int, today: date) -> dict:
     else:
         pd.DataFrame(columns=["ts", "cimis_date", "hour", "t_c", "t_qc", "srad", "srad_qc", "rh", "rh_qc"]).to_parquet(out, index=False)
         n = 0
-    return {"station": s.id, "season": season, "hours": n, **{f"qc_{k}": v for k, v in qc_counts.items()}}
+    return {"station": s.id, "season": season, "hours": n, "sources": sorted(sources), "cimis_rejected": rejected,
+            **{f"qc_{k}": v for k, v in qc_counts.items()}}
+
+
+def _fnric_live_month(s, y: int, m: int, season: int) -> pd.DataFrame | None:
+    """This month's CIMIS hours when CIMIS itself refuses: the hours already stored, topped up with FNRIC's
+    relay of the same readings (stemwater: the latest 300 hours, labeled by hour start). Checked against
+    CIMIS on 300 hours at Davis: 96% identical, the rest within 0.1 °F (rounding)."""
+    sw = fnric.stemwater(s.id, cimis.live_block())
+    if sw.empty or "HlyAirTmp_Value" not in sw:
+        return None
+    ts = sw["Timestamp"] + pd.Timedelta(hours=1)  # hour-beginning -> CIMIS hour-ending stamps
+    start = ts - pd.Timedelta(hours=1)
+    new = pd.DataFrame({
+        "ts": ts, "cimis_date": start.dt.date, "hour": start.dt.hour + 1,
+        "t_c": (pd.to_numeric(sw["HlyAirTmp_Value"], errors="coerce") - 32.0) * 5.0 / 9.0,
+        "t_qc": sw.get("HlyAirTmp_Qc", pd.Series(" ", index=sw.index)).fillna(" ").replace("", " "),
+        "srad": np.nan, "srad_qc": " ",
+        "rh": pd.to_numeric(sw.get("HlyRelHum_Value"), errors="coerce"), "rh_qc": " ",
+    })
+    new = new[(start.dt.year == y) & (start.dt.month == m)]
+    old = pd.DataFrame()
+    p = hourly_path(s.id, season)
+    if p.exists():
+        old = pd.read_parquet(p)
+        cd = pd.to_datetime(old["cimis_date"])
+        old = old[(cd.dt.year == y) & (cd.dt.month == m)].drop(columns=["source"], errors="ignore")
+        old["ts"] = pd.to_datetime(old["ts"])
+    out = pd.concat([old, new], ignore_index=True) if len(old) else new
+    if out.empty:
+        return None
+    return out.sort_values("ts").drop_duplicates("ts", keep="last").reset_index(drop=True)
 
 
 def _synoptic_month(s, y: int, m: int):

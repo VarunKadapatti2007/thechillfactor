@@ -50,7 +50,10 @@ def default_climate() -> str:
 
 
 def cimis_key() -> str | None:
-    return os.environ.get("CIMIS_APP_KEY") or None
+    """The CIMIS key is one token. Anything after it on the line (stray spaces or text) is dropped:
+    CIMIS's firewall rejects a key header that carries extra text."""
+    v = (os.environ.get("CIMIS_APP_KEY") or "").split()
+    return v[0] if v else None
 
 
 SEED = 20261024

@@ -82,7 +82,7 @@ The error bar shown with readings is the 80th-percentile miss for the matching s
 1. **Feed in-orchard networks into the estimate.** FNRIC already carries Wildeye stations. The Semios study shows kriging a dense in-orchard network brings the no-readings miss from 3.7 to 2.4 CP. The data path exists, but the FNRIC API has a limited budget, so this needs FNRIC's agreement.
 2. **A bud-temperature correction.** TreeChill-style corrections for sunny, fog-free spells (8 to 12 CP in the cited work) would need field validation against bud phenology before shipping.
 3. **Confirm the "by" dates and requirement ranges with FNRIC.** Requirement uncertainty is as large as our measurement error.
-4. **Live CIMIS on the hosted server.** CIMIS's firewall rejects requests from Google Cloud addresses (same request, same minute, works from a home connection). The server keeps serving real data through the last successful pull and shows the rejection at `/api/health`. A CIMIS allow-list request, or a scheduled pull from an accepted address, would keep it current.
+4. **Live CIMIS on the hosted server (fixed).** The rejections were not about Google Cloud: the key line in `.env` carried about 700 stray spaces and a character after the 32-character key, and CIMIS's firewall rejects a header like that from anywhere. The engine now reads only the key itself. The server re-pulls this month every 3 hours, falls back to FNRIC's relay of the same CIMIS readings if CIMIS ever refuses, and reports sources and freshness at `/api/health`.
 
 ## Sources
 

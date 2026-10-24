@@ -164,7 +164,13 @@ Question from the user: are we really closing Julia's gap? Full write-up in RESE
 - Tested today, leave-one-station-out: shrinking the Daymet offset (hidden 3.95 vs 3.91 CP; orchards 3.29 vs 3.53) and stacking E0/E1/E4 (hidden MAE 3.71 but RMSE worse). Neither improves both tests; not shipped.
 - The answer to the gap is local data, which the product could not take until now. New `engine/chillprint/validation/orchard_readings.py` (real data): a site's own daily low/high from Sep 1 brings the typical miss to 1.84 CP at 18 Wildeye pistachio orchards (30 winters; station-only 3.52 with bias +2.29, readings bias -0.05) and 1.56 CP at hidden stations. From Nov 1: 1.75 / 1.67; Dec 1: 2.16 / 2.19; Jan 1: 2.77 / 2.64.
 - Shipped: `POST /api/orchard` (daily lows/highs or logger readings, °F/°C; gaps up to 4 days or 6 logger hours filled, longer gaps and days before the readings use E4; one Dynamic Model run over the merged winter; error bar = P80 for the matching start date from the in-orchard test). Web: optional step 3 "Your orchard's own readings" with CSV upload and a real example (Terra Bella Wildeye sensor, winter 2025-26: readings 68.2 CP vs the sensor's hourly truth 69.5 and the station estimate 70.2). Accuracy tab shows the start-date table.
-- Hosting: Firebase Hosting (thechill-d4688.web.app) with /api/** on Cloud Run (chillprint-api, us-west1). CIMIS's firewall rejects requests from Google Cloud addresses (same request works from a home connection), so the hosted live season is current to the last staged pull; the server records the rejection at /api/health and never caches the rejection page.
+- Hosting: Firebase Hosting (thechill-d4688.web.app) with /api/** on Cloud Run (chillprint-api, us-west1).
+
+## Live CIMIS, fixed (2026-10-24 10:30)
+
+- Root cause of the "Request Rejected" pages: the `.env` key line held the 32-character key plus ~700 spaces and a stray character, sent whole in the header; CIMIS's firewall rejected it from every address (a test from Google Cloud without a key reached CIMIS normally, 401). My earlier "CIMIS accepts again" probe was a cache hit. `config.cimis_key()` now takes the first token; with it, CIMIS answers from home and from Cloud Run.
+- Live refresh every 3 hours (this month re-pulled once per 3-hour block, one request per station). If CIMIS refuses, the rest of the cycle uses FNRIC `stemwater`, which relays the same CIMIS hours: on 300 Davis hours, shifted from hour-beginning to hour-ending labels, 96% identical and the rest within 0.1 °F, with the same QC flags. Container clock set to Pacific time. `/api/health` reports sources, latest hour and age.
+- METHODS.md: every formula, plus why daily lows and highs cut the error (sensitivity: 1 °C on every hour = about 10 CP by Mar 1; readings remove the +2.29 CP orchard bias and cut scatter from 3.57 to 2.28 CP).
 
 ## Known traps checklist (BUILD.md section 9)
 
