@@ -1,5 +1,7 @@
 # secrets
 .env
+.env.*
+!.env.example
 run_env.yaml
 
 # python
