@@ -118,6 +118,20 @@ def e4_hours(nb_hourly: pd.Series, dm_s: pd.DataFrame, dm_nb: pd.DataFrame, seas
     return e4.reindex(season_stamps(season)).interpolate(limit_direction="both").to_numpy()
 
 
+def e8_hours(nbs: list[tuple[str, float, float, float]], dm_s: pd.DataFrame, season: int) -> np.ndarray | None:
+    """E8 (pre-registered, see PROGRESS.md): the three nearest stations with a complete record,
+    each shifted to the target by the Daymet monthly offset (as E4), averaged hour by hour with
+    1/distance^2 weights (as E1). nbs: (station id, distance km, lat, lon), nearest first."""
+    from ..pipeline.build_pin import _daymet_station
+    arrs, ws = [], []
+    for sid, d, la, lo in nbs[:3]:
+        arrs.append(e4_hours(SH.station_hourly(sid), dm_s, _daymet_station(sid, la, lo), season))
+        ws.append(1.0 / max(d, 0.5) ** 2)
+    if not arrs:
+        return None
+    return np.average(np.vstack(arrs), axis=0, weights=ws)
+
+
 def own_window_daily(hourly: pd.Series, season: int, win: Window) -> pd.DataFrame:
     days = pd.date_range(pd.Timestamp(season, 8, 29), pd.Timestamp(season + 1, 4, 3), freq="D")
     tmin, tmax, _ = window_minmax(hourly, days, win, max_missing=4)

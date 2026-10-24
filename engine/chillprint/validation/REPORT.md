@@ -12,6 +12,7 @@ Mode: **full**. 65 hidden stations, 855 station-winters (the same cases for ever
 | E3 Daymet + borrowed shape | 4.94 | 4.43 | 7.48 | 9.46 | -4.04 | 4.8 | 8.2 | 2.03 | 43.0 |
 | E4 Station + Daymet offset | 3.44 | 2.59 | 5.27 | 7.54 | 0.48 | 3.3 | 5.4 | 1.79 | None |
 | E5 One reading a day | 1.56 | 1.22 | 2.48 | 3.22 | 0.2 | 1.7 | 2.6 | 1.24 | 0.0 |
+| E8 3 stations + Daymet offset (tested, not adopted) | 3.26 | 2.38 | 5.12 | 7.15 | 1.18 | 3.2 | 5.2 | 1.57 | None |
 | E7 Daymet + ML night-low fix (not shipped) | 4.25 | | 6.69 | | -3.31 | | | | |
 
 By distance to the nearest station (mean abs error by Mar 1, CP):
@@ -24,6 +25,7 @@ By distance to the nearest station (mean abs error by Mar 1, CP):
 | E3 | 6.88 | 6.25 | 4.87 | 5.2 |
 | E4 | 2.65 | 4.17 | 3.5 | 5.12 |
 | E5 | 1.46 | 1.58 | 1.75 | 2.0 |
+| E8 | 2.59 | 3.78 | 3.51 | 4.63 |
 
 By terrain:
 
@@ -35,16 +37,19 @@ By terrain:
 | E3 | 5.84 | 4.59 |
 | E4 | 3.77 | 4.81 |
 | E5 | 1.59 | 2.13 |
+| E8 | 3.5 | 4.8 |
 
 ## Findings
 
 - E3 (Daymet + borrowed shape) does not beat the nearest station: typical miss 4.9 vs 3.9 CP.
 - E4 (Station + Daymet offset) beats the nearest station: typical miss 3.4 vs 3.9 CP.
+- Statistically (cluster bootstrap over stations), E4's edge over the nearest station is 0.42 CP with a 95% interval of -0.12 to 1.22: likely but not proven overall; clear at 25-50 km.
 - One daily reading at the orchard (E5) brings the typical miss to 1.6 CP.
 - The outlook beats climatology: Brier 0.0108 vs 0.0168.
 - Today's-climate shift is on by default (Brier 0.0108 with, 0.0111 without).
-- At Wildeye in-orchard stations: E0 3.1 CP, E2 4.0 CP, E3 5.3 CP, E4 3.5 CP.
+- At Wildeye in-orchard stations: E0 3.1 CP, E2 4.0 CP, E3 5.3 CP, E4 3.5 CP, E8 3.8 CP.
 - Up to 30% missing days scattered through the winter, or gaps up to 4 days, keeps the typical error under 2 CP (with no gaps, 8 in 10 winters land within 2.8 CP).
+- Pre-registered test: averaging three stations (E8) misses by 3.26 CP, 0.19 less than E4 (95% interval -0.07 to 0.42) and slightly worse at orchards, so it was not adopted.
 - Phase 6: an ML hourly shape on Daymet scores 3.55 CP vs 4.94 for the borrowed shape and 4.20 for the textbook curve (832 station-winters); it replaces the textbook curve for winters with no station record.
 - Phase 6: the ML night-low fix (E7) improves Daymet (4.25 vs E3 4.96 CP) but does not beat the E4 default (3.45); not shipped.
 
@@ -52,7 +57,7 @@ Default for past winters: **E4**. Default for the live season: **E4**. Chosen by
 
 ## Wildeye in-orchard test (BUILD.md 5.3)
 
-18 stations. E0: 3.12 CP, E2: 4.0 CP, E3: 5.3 CP, E4: 3.52 CP
+18 stations. E0: 3.12 CP, E2: 4.0 CP, E3: 5.3 CP, E4: 3.52 CP, E8: 3.84 CP
 
 ## Durham (CIMIS 12) case study (BUILD.md 5.7)
 

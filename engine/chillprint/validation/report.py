@@ -17,7 +17,7 @@ from ..pipeline import station_hourly as SH
 from . import backtest, data_diet, error_model, hidden_station, wildeye
 from . import common as V
 
-ORDER = ["E0", "E1", "E2", "E3", "E4", "E5"]
+ORDER = ["E0", "E1", "E2", "E3", "E4", "E5", "E8"]
 LEAKAGE = ("Daymet may include some of the same weather records as the hidden stations, so hidden-station "
            "scores may be a little optimistic; the Wildeye in-orchard test has no such overlap.")
 
@@ -135,12 +135,26 @@ def summarize() -> dict:
                         "mae_cp": round(float(e.abs().mean()), 2), "p80_cp": round(float(e.abs().quantile(0.8)), 2),
                         "bias_cp": round(float(e.mean()), 2)}
 
+    sig_p = V.OUT / "significance.json"
+    sig = json.loads(sig_p.read_text(encoding="utf-8")) if sig_p.exists() else {}
+    e8_adopted = bool(sig.get("preregistered_E8", {}).get("adopt"))
+
     e5_note = None
     if "E5" in scores and "E0" in scores:
         e5_note = (f"Adding one daily low and high at the orchard cuts the typical miss from "
                    f"{scores['E0']['mae_cp']:.1f} CP (nearest station) to {scores['E5']['mae_cp']:.1f} CP.")
 
     findings = _findings(scores, hist_id, live_id, we_scores, bt, bt_full, dd_rule, mode)
+    if sig.get("paired_vs_E4"):
+        d0 = sig["paired_vs_E4"]["E0"]
+        findings.insert(2, f"Statistically (cluster bootstrap over stations), E4's edge over the nearest station is "
+                           f"{-d0['mean_diff']:.2f} CP with a 95% interval of {-d0['ci95'][1]:.2f} to {-d0['ci95'][0]:.2f}: "
+                           f"likely but not proven overall; clear at 25-50 km.")
+    if sig.get("preregistered_E8"):
+        e8 = sig["preregistered_E8"]
+        findings.append(f"Pre-registered test: averaging three stations (E8) misses by {scores['E8']['mae_cp']:.2f} CP, "
+                        f"{-e8['E8_minus_E4']['mean_diff']:.2f} less than E4 (95% interval {-e8['E8_minus_E4']['ci95'][1]:.2f} to "
+                        f"{-e8['E8_minus_E4']['ci95'][0]:.2f}) and slightly worse at orchards, so it was not adopted.")
     ml_shape_info = None
     if (V.OUT / "ml_shape_summary.json").exists():
         ml_shape_info = json.loads((V.OUT / "ml_shape_summary.json").read_text(encoding="utf-8"))
@@ -153,7 +167,7 @@ def summarize() -> dict:
     summary = {
         "n_stations": int(hc.station_id.nunique()),
         "n_station_seasons": int(hc[["station_id", "season"]].drop_duplicates().shape[0]),
-        "estimators": [{"id": e, "name": hidden_station.NAMES[e], "mae_cp": scores[e]["mae_cp"],
+        "estimators": [{"id": e, "name": hidden_station.NAMES[e] + (" (tested, not adopted)" if e == "E8" and not e8_adopted else ""), "mae_cp": scores[e]["mae_cp"],
                         "p80_cp": scores[e]["p80_cp"], "bias_cp": scores[e]["bias_cp"]} for e in present]
                       + ([e7_entry] if e7_entry else []),
         "wildeye": {"n_stations": we_n, "estimators": we_scores},
@@ -168,7 +182,7 @@ def summarize() -> dict:
         "e5_note": e5_note,
         "findings": findings,
         "mode": mode,
-        "details": {"e7": e7_info, "ml_shape": ml_shape_info, "scores": scores, "by_distance": by_dist, "by_terrain": by_ter, "durham_mae": durham_err,
+        "details": {"significance": sig, "e7": e7_info, "ml_shape": ml_shape_info, "scores": scores, "by_distance": by_dist, "by_terrain": by_ter, "durham_mae": durham_err,
                     "backtest": bt_full, "data_diet_curve": dd_curve, "data_diet_station_seasons": dd_n},
         "sources": [C.SOURCES["cimis"], C.SOURCES["fnric"], C.SOURCES["daymet"]],
         "method": "hidden-station validation (BUILD.md section 5)",

@@ -26,6 +26,7 @@ NAMES = {
     "E3": "Daymet + borrowed shape",
     "E4": "Station + Daymet offset",
     "E5": "One reading a day",
+    "E8": "3 stations + Daymet offset",
 }
 SEASONS = range(C.VALIDATION_FIRST_SEASON, C.LAST_COMPLETE_DAYMET_SEASON + 2)  # 2005-06 .. 2025-26
 
@@ -108,6 +109,10 @@ def run_station(args) -> list[dict]:
             dm_nb = V.daymet_pixel(nb.iloc[0].id)
             if dm is not None and dm_nb is not None:
                 hourly_est["E4"] = V.e4_hours(SH.station_hourly(nb.iloc[0].id), dm, dm_nb, y)
+            if dm is not None and len(nb) >= 2:
+                e8 = V.e8_hours([(r.id, r.dist_km, r.lat, r.lon) for r in nb.head(3).itertuples()], dm, y)
+                if e8 is not None:
+                    hourly_est["E8"] = e8
             own_d = V.own_window_daily(own, y, win)
             hourly_est["E5"] = V.b_hours(s.lat, own_d, y, shapes, win)
         for k, h in hourly_est.items():

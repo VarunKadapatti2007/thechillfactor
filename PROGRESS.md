@@ -139,6 +139,23 @@ Nothing shipped makes a headline metric worse: the validation table and the E4 d
 
 GitHub: skipped by decision; the repo is committed locally and ready to publish (`gh auth login`, then create a public repo and push).
 
+## Statistical check of the default, and a pre-registered test (2026-10-24 05:52)
+
+Paired cluster bootstrap (resampling whole stations, 5,000 draws) on 855 hidden station-winters, `validation/significance.py`:
+- E4 vs nearest station (E0): -0.42 CP, 95% CI -1.22 to +0.12. **Not conclusive overall.** Conclusive at 25-50 km (-0.51, CI -0.96 to -0.04) and under 10 km (-0.50, 6 stations); no difference at 10-25 km.
+- E4 vs 3-station average (E1): tie (+0.02, CI -0.80 to +0.53). E4 vs E2 and E3: E4 better (CIs exclude zero).
+- Wildeye orchards, E4 vs E0: +0.11, CI -0.37 to +0.63 (no difference).
+- Split-sample: chosen on 2005-14, E4 still beats E0 on 2015-26 (3.23 vs 3.60); chosen on half the stations (E1 wins that half), both E1 and E4 beat E0 on the other half (3.84, 3.51 vs 4.28).
+- Corrected claim: E4 clearly beats the gridded methods; its edge over the nearest station is real at 25-50 km but not proven overall. The decisive gain is an orchard's own daily reading (E5, 1.56 CP; CI vs E4 excludes zero).
+
+**Pre-registered test, written before running it.** E8 = the three nearest stations with a complete record that winter, each shifted to the pin by the Daymet monthly offset (as in E4), averaged hour by hour with 1/distance² weights (the same weights as E1). No tuned parameters. E8 replaces E4 as the default only if all three hold:
+1. paired cluster-bootstrap 95% CI of (E8 - E4) on the 855 hidden station-winters lies entirely below zero;
+2. it beats E4 in both split-sample halves (2015-26 winters; second half of stations);
+3. it is not worse than E4 at the Wildeye orchards (mean difference <= 0).
+Otherwise E4 stays and E8 is reported as tested.
+
+**Result (run after the criteria above were written):** E8 MAE 3.26 vs E4 3.44 CP. (1) E8 - E4 = -0.19 CP, 95% CI -0.42 to +0.07: **fails** (interval includes zero). (2) beats E4 on both held-out halves (3.04 vs 3.23 on 2015-26; 3.23 vs 3.51 on the other stations): passes. (3) Wildeye: +0.12 CP worse than E4: **fails**. **E8 not adopted; E4 stays the default.** E8 is shown on the Accuracy page as "tested, not adopted".
+
 ## Known traps checklist (BUILD.md section 9)
 
 - [x] FNRIC `chill-year` in two-year form (asserted in `fnric.chill_models`); arrays sorted; daily values cumulated

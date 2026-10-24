@@ -67,6 +67,10 @@ def run() -> pd.DataFrame:
                     dm_nb = V.daymet_pixel(nb.iloc[0].id)
                     if dm is not None and dm_nb is not None:
                         ests["E4"] = V.daily_cum(V.e4_hours(SH.station_hourly(nb.iloc[0].id), dm, dm_nb, y))
+                    if dm is not None and len(nb) >= 2:
+                        e8 = V.e8_hours([(r.id, r.dist_km, r.lat, r.lon) for r in nb.head(3).itertuples()], dm, y)
+                        if e8 is not None:
+                            ests["E8"] = V.daily_cum(e8)
             tm = V.metrics(truth, y)
             for k, c in ests.items():
                 m = V.metrics(c, y)
