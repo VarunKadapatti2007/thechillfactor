@@ -115,7 +115,8 @@ def summarize(df: pd.DataFrame) -> dict:
             e = pd.concat([gs.err_feb1, gs.err_mar1]).dropna()
             t["scenarios"][sc] = {"mae_cp": round(float(e.abs().mean()), 2), "p80_cp": round(float(e.abs().quantile(0.8)), 2),
                                   "bias_cp": round(float(e.mean()), 2),
-                                  "mae_mar1": round(float(gs.err_mar1.abs().mean()), 2)}
+                                  "mae_mar1": round(float(gs.err_mar1.abs().mean()), 2),
+                                  "mape_mar1": round(float((gs.err_mar1.abs() / gs.truth_mar1.where(gs.truth_mar1 > 5)).mean() * 100), 1)}
         out["tests"][test] = t
     return out
 

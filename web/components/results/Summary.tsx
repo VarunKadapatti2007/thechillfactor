@@ -27,62 +27,51 @@ function Row({ icon, label, info, children }: { icon: ReactNode; label: string; 
 }
 
 function FlagNote({ o, unit }: { o: OrchardInfo; unit: string }) {
-  if (!(o.flagged_count ?? 0)) {
-    return (
-      <p className="mt-2 text-[12px] text-muted">
-        Every reading was checked against the Central Valley&apos;s range and what nearby stations measured; none looked wrong.
-      </p>
-    );
-  }
+  const n = o.flagged_count ?? 0;
+  if (!n) return null;
   return (
     <div className="mt-2 rounded-[8px] border border-amber-300 bg-amber-50 p-2.5 text-[12px] leading-relaxed text-amber-900" role="status">
       <p className="font-semibold">
-        {(o.flagged_count ?? 0)} reading{(o.flagged_count ?? 0) > 1 ? "s were" : " was"} set aside because {(o.flagged_count ?? 0) > 1 ? "they don't" : "it doesn't"} look right. Those
-        days were filled from the days around them. Check your thermometer or file:
+        {n} reading{n > 1 ? "s" : ""} set aside (looked wrong):
       </p>
       <ul className="mt-1 list-disc pl-4">
         {(o.flagged ?? []).slice(0, 6).map((f) => (
           <li key={`${f.when}-${f.field}`}>
-            <strong>
-              {f.when}: {f.field} {f.value}°{unit}
-            </strong>
-            {f.expected !== null ? `, nearby stations suggest about ${Math.round(f.expected)}°` : ""}. {f.reason.charAt(0).toUpperCase() + f.reason.slice(1)}.
+            {f.when}: {f.field} {f.value}°{unit}
+            {f.expected !== null ? `, stations suggest about ${Math.round(f.expected)}°` : ""}
           </li>
         ))}
       </ul>
-      {(o.flagged_count ?? 0) > 6 && <p className="mt-1">... and {(o.flagged_count ?? 0) - 6} more.</p>}
+      {n > 6 && <p className="mt-1">... and {n - 6} more.</p>}
     </div>
   );
 }
 
-function OrchardNote({ o, cp, season }: { o: OrchardInfo; cp: number; season: string }) {
-  const diff = o.difference_cp;
+// One line; the details live in the info bubble.
+function OrchardNote({ o, cp, asof, start }: { o: OrchardInfo; cp: number; asof: string; start: string }) {
+  const st = o.station_estimate_cp;
+  const vs = st ? Math.round(((cp - st) / st) * 100) : null;
   return (
-    <div className="mt-2 flex gap-2 rounded-[8px] bg-bg p-2.5 text-[12px] leading-relaxed">
-      <Thermometer size={16} aria-hidden className="mt-0.5 shrink-0 text-chill" />
-      <div>
-        <span className="font-semibold">Counted from your orchard&apos;s readings</span> ({o.kind === "daily" ? `${o.days} days of lows and highs` : "logger readings"},{" "}
-        {longDate(o.first)} to {longDate(o.last)}, the {season} winter).
-        {o.station_estimate_cp !== null && diff !== null && (
-          <>
-            {" "}
-            The station-only estimate for the same days was <span className="num">{o.station_estimate_cp.toFixed(0)}</span> chill portions; your readings give{" "}
-            <span className="num">{cp.toFixed(0)}</span>
-            {Math.abs(diff) >= 0.5 ? ` (${diff > 0 ? "+" : ""}${diff.toFixed(1)})` : " (about the same)"}.
-          </>
-        )}
-        {o.before_start_from_station && " Days before your readings start use the station estimate."}
-        {o.gap_filled > 0 && ` ${o.gap_filled} missing ${o.gap_unit} were filled in from the days around them.`}
-        {o.gap_estimated > 0 && ` ${o.gap_estimated} ${o.gap_unit} in longer gaps use the station estimate.`}
-        {o.error_source !== "not validated" && ` The give-or-take comes from the ${o.error_source}.`}
-      </div>
-    </div>
+    <p className="mt-2 flex items-center gap-1.5 text-[12px] text-muted">
+      <Thermometer size={14} aria-hidden className="shrink-0 text-chill" />
+      Temperature data from your orchard readings
+      <InfoTip label="your readings">
+        {o.kind === "daily" ? `${o.days} days of lows and highs` : "Logger readings"}, {longDate(o.first)} to {longDate(o.last)}; as of {longDate(asof)}, counting
+        from {start === "sep1" ? "Sep 1" : "Nov 1"}.
+        {st !== null && vs !== null ? ` Station-only estimate: ${st.toFixed(0)} chill portions; your readings ${vs === 0 ? "match it" : `are ${vs > 0 ? "+" : ""}${vs}% from it`}.` : ""}
+        {o.gap_filled + o.gap_estimated > 0 ? ` ${o.gap_filled + o.gap_estimated} missing ${o.gap_unit} filled.` : ""}
+        {o.error_source !== "not validated" ? ` Give-or-take from the ${o.error_source}.` : ""}
+      </InfoTip>
+    </p>
   );
 }
 
 function needText(low: number, high: number) {
   return low === high ? `${low}` : `${low} to ${high}`;
 }
+
+// Chill as a share of the minimum need: higher is better, 100% means the need is met.
+const ofNeed = (cp: number, low: number) => Math.round((cp / low) * 100);
 
 export default function Summary({ p }: { p: PointResponse }) {
   const { s } = useStore();
@@ -115,8 +104,11 @@ export default function Summary({ p }: { p: PointResponse }) {
 
       <div className="mt-3">
         <Row icon={<Snowflake size={18} />} label="Chill collected so far" info={`${EXPLAIN.chillPortion} ${p.chill.error_cp !== null ? EXPLAIN.errorBar : ""}`}>
-          <span className="num font-semibold">{p.chill.to_date.toFixed(0)}</span> of the {needText(low, high)} chill portions needed
-          {p.chill.error_cp !== null && <span className="text-muted"> (give or take {p.chill.error_cp.toFixed(0)})</span>}
+          <span className="num font-semibold">{ofNeed(p.chill.to_date, low)}%</span> of the minimum need{" "}
+          <span className="text-muted">
+            ({p.chill.to_date.toFixed(0)} of {low} chill portions{p.chill.error_cp !== null ? `, give or take ${ofNeed(p.chill.error_cp, low)}%` : ""}; higher is
+            better)
+          </span>
           <div className="relative mt-2 h-2.5 rounded-full bg-bg" aria-hidden>
             <div className="absolute inset-y-0 rounded-full" style={{ left: `${(low / (high * 1.15)) * 100}%`, width: `${Math.max(1.5, ((high - low) / (high * 1.15)) * 100)}%`, background: "#3b7ea122" }} />
             <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pct}%`, background: L.color }} />
@@ -124,13 +116,13 @@ export default function Summary({ p }: { p: PointResponse }) {
         </Row>
         {finished ? (
           <Row icon={<CalendarClock size={18} />} label={`By ${by}`} info={EXPLAIN.odds}>
-            This winter reached <span className="num font-semibold">{p.outlook.p50.toFixed(0)}</span> chill portions by {by}
-            {p.outlook.p50 >= high ? ", the full need." : p.outlook.p50 >= low ? `, inside the ${needText(low, high)} range.` : `, short of the ${low} needed.`}
+            Reached <span className="num font-semibold">{ofNeed(p.outlook.p50, low)}%</span> of the minimum need by {by}
+            {p.outlook.p50 >= high ? ", the full need." : p.outlook.p50 >= low ? ", inside the need range." : ", short of the need."}
           </Row>
         ) : (
           <Row icon={<CalendarClock size={18} />} label={`Expected by ${by}`} info={EXPLAIN.odds}>
-            Most likely about <span className="num font-semibold">{p.outlook.p50.toFixed(0)}</span> chill portions, probably between{" "}
-            <span className="num">{p.outlook.p10.toFixed(0)}</span> and <span className="num">{p.outlook.p90.toFixed(0)}</span>.
+            Most likely <span className="num font-semibold">{ofNeed(p.outlook.p50, low)}%</span> of the minimum need, probably between{" "}
+            <span className="num">{ofNeed(p.outlook.p10, low)}%</span> and <span className="num">{ofNeed(p.outlook.p90, low)}%</span> (100% = need met).
           </Row>
         )}
         {!finished && <Row icon={<Percent size={18} />} label="Chance of enough chill" info={EXPLAIN.odds}>
@@ -144,15 +136,17 @@ export default function Summary({ p }: { p: PointResponse }) {
         </Row>}
       </div>
 
-      {orchard && <OrchardNote o={orchard} cp={p.chill.to_date} season={p.season} />}
+      {orchard && <OrchardNote o={orchard} cp={p.chill.to_date} asof={p.asof} start={p.start} />}
       {orchard && <FlagNote o={orchard} unit={r.readings?.unit ?? "F"} />}
 
       {p.verdict.early && <p className="mt-1 rounded-[8px] bg-bg p-2.5 text-[12px] leading-relaxed">{EXPLAIN.early}</p>}
 
-      <p className="mt-3 flex flex-wrap items-center gap-1 text-[11px] text-muted">
-        As of {longDate(p.asof)} · counting from {p.start === "sep1" ? "Sep 1" : "Nov 1"} · weather from {station}
-        <InfoTip label="how we estimate">{EXPLAIN.method}</InfoTip>
-      </p>
+      {!orchard && (
+        <p className="mt-3 flex flex-wrap items-center gap-1 text-[11px] text-muted">
+          As of {longDate(p.asof)} · weather from {station}
+          <InfoTip label="how we estimate">{EXPLAIN.method}</InfoTip>
+        </p>
+      )}
     </div>
   );
 }

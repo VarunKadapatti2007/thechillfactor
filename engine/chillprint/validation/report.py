@@ -33,6 +33,7 @@ def _score(sub: pd.DataFrame) -> dict:
             "cross54_days": round(float(sub.cross54_err.abs().mean()), 1) if sub.cross54_err.notna().any() else None,
             "hourly_rmse_c": round(float(sub.hourly_rmse.mean()), 2) if sub.hourly_rmse.notna().any() else None,
             "gdd_mae": round(float(sub.gdd_err.abs().mean()), 1) if sub.gdd_err.notna().any() else None,
+            "mape_mar1": round(float((sub.err_mar1.abs() / sub.truth_mar1.where(sub.truth_mar1 > 5)).mean() * 100), 1),
             "n": int(len(sub))}
 
 
@@ -177,7 +178,7 @@ def summarize() -> dict:
         "n_stations": int(hc.station_id.nunique()),
         "n_station_seasons": int(hc[["station_id", "season"]].drop_duplicates().shape[0]),
         "estimators": [{"id": e, "name": hidden_station.NAMES[e] + (" (tested, not adopted)" if e == "E8" and not e8_adopted else ""), "mae_cp": scores[e]["mae_cp"],
-                        "p80_cp": scores[e]["p80_cp"], "bias_cp": scores[e]["bias_cp"]} for e in present]
+                        "p80_cp": scores[e]["p80_cp"], "bias_cp": scores[e]["bias_cp"], "mape_mar1": scores[e]["mape_mar1"]} for e in present]
                       + ([e7_entry] if e7_entry else []),
         "wildeye": {"n_stations": we_n, "estimators": we_scores},
         "durham": {"winters": winters},

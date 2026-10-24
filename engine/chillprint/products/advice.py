@@ -40,6 +40,7 @@ and the daily readings.
 
 Write practical, specific next steps for this grower.
 - Use only the numbers in the JSON. Quote them rounded the way a grower would say them: whole chill \nportions ("68 CP"), dates like "Mar 1", odds like "8 in 10", temperatures to the nearest degree.
+- When comparing, use percentages: chill as a percent of the minimum need (100% = need met, higher is \nbetter) and errors as a percent (lower is better), with the chill portions in brackets if useful.
 - Fit the advice to the verdict and the time of season: early season (before mid-November) is about \
 monitoring and data; mid-winter about tracking and protecting chill; near the need date about bloom \
 preparation; a past winter about lessons and planning.
@@ -96,6 +97,17 @@ def _daily_table(kind: str, unit: str, dates, lows, highs, times, temps) -> list
              None if not np.isfinite(r.tmax) else round(float(back(r.tmax)), 1)] for d, r in df.iterrows()]
 
 
+def _accuracy() -> dict:
+    """Measured typical error, as a percent of the chill actually measured (lower is better)."""
+    try:
+        t = json.loads((C.VALIDATION_DIR / "orchard_readings.json").read_text())["tests"]["wildeye_orchard"]
+        return {"typical_error_with_daily_readings_pct": t["scenarios"]["readings_from_sep1"].get("mape_mar1"),
+                "typical_error_stations_only_pct": t["scenarios"]["station_only"].get("mape_mar1"),
+                "tested_at": f"{t['n_sites']} Wildeye pistachio orchards (UC FNRIC data)", "lower_is_better": True}
+    except Exception:
+        return {}
+
+
 def farm_context(lat: float, lon: float, crop: str, variety: str, kind: str, unit: str, dates=None, lows=None,
                  highs=None, times=None, temps=None, start: str = "sep1", by: str | None = None, climate: str = "today",
                  block_acres: float | None = None, label: str | None = None, today: date | None = None) -> dict:
@@ -134,8 +146,10 @@ def farm_context(lat: float, lon: float, crop: str, variety: str, kind: str, uni
             "safe_winter_chill_2006_2025": hist["safe_chill"]["recent"]["p10"],
             "last_10_winters_cp_by_need_date": [[w["season"], w["cp_by"]] for w in recent],
         },
-        "accuracy": {"typical_miss_with_daily_readings_cp": 1.8, "typical_miss_stations_only_cp": 3.5,
-                     "tested_at": "18 Wildeye pistachio orchards (UC FNRIC data)"},
+        "percent_of_minimum_need": {"chill_so_far": round(100 * out["chill"]["to_date"] / v.need_low),
+                                    "most_likely_at_need_date": round(100 * out["outlook"]["p50"] / v.need_low),
+                                    "error_bar": None if out["chill"]["error_cp"] is None else round(100 * out["chill"]["error_cp"] / v.need_low)},
+        "accuracy": _accuracy(),
     }
 
 

@@ -23,21 +23,21 @@ const READING_ROWS: [string, string][] = [
 function ReadingsTable({ o }: { o: NonNullable<ValidationResponse["orchard_readings"]> }) {
   const we = o.tests.wildeye_orchard;
   const hs = o.tests.hidden_station;
-  const fmt = (x: number | undefined) => (x === undefined ? "Not available" : x.toFixed(1));
+  const fmt = (x: number | undefined) => (x === undefined ? "Not available" : `${x.toFixed(1)}%`);
   const sentence =
-    we && we.scenarios.station_only && we.scenarios.readings_from_sep1
-      ? `At ${we.n_sites} pistachio orchards, a min/max thermometer cut the typical miss from ${we.scenarios.station_only.mae_cp.toFixed(1)} to ${we.scenarios.readings_from_sep1.mae_cp.toFixed(1)} chill portions.`
-      : "Typical miss when the grower adds daily lows and highs.";
+    we && we.scenarios.station_only?.mape_mar1 !== undefined && we.scenarios.readings_from_sep1?.mape_mar1 !== undefined
+      ? `At ${we.n_sites} pistachio orchards, a min/max thermometer cut the typical error from ${fmt(we.scenarios.station_only.mape_mar1)} to ${fmt(we.scenarios.readings_from_sep1.mape_mar1)} (lower is better).`
+      : "Typical error when the grower adds daily lows and highs (lower is better).";
   return (
     <Section
       title="Your own readings"
       sentence={sentence}
-      info="We gave the method each site's own daily low and high (what a min/max thermometer records) from the start date on, used the station estimate before that, rebuilt the hours from the nearest stations' shape, and compared chill on Feb 1 and Mar 1 with the site's hourly truth."
+      info="Error is the miss as a percent of the chill each site actually measured by Mar 1. We gave the method each site's own daily low and high from the start date on, used the station estimate before that, and compared with the site's hourly truth."
     >
       <table className="num w-full text-left text-[12px]">
         <thead>
           <tr className="text-muted">
-            <th className="py-1 font-medium">Typical miss (CP)</th>
+            <th className="py-1 font-medium">Typical error (lower is better)</th>
             {we && <th className="py-1 text-right font-medium">In orchards ({we.n_station_winters} winters)</th>}
             {hs && <th className="py-1 text-right font-medium">Hidden stations ({hs.n_station_winters})</th>}
           </tr>
@@ -46,8 +46,8 @@ function ReadingsTable({ o }: { o: NonNullable<ValidationResponse["orchard_readi
           {READING_ROWS.map(([k, label]) => (
             <tr key={k} className="border-t border-line">
               <td className="py-1">{label}</td>
-              {we && <td className="py-1 text-right">{fmt(we.scenarios[k]?.mae_cp)}</td>}
-              {hs && <td className="py-1 text-right">{fmt(hs.scenarios[k]?.mae_cp)}</td>}
+              {we && <td className="py-1 text-right">{fmt(we.scenarios[k]?.mape_mar1)}</td>}
+              {hs && <td className="py-1 text-right">{fmt(hs.scenarios[k]?.mape_mar1)}</td>}
             </tr>
           ))}
         </tbody>
@@ -113,55 +113,57 @@ function Headline({ value, label }: { value: string; label: string }) {
   );
 }
 
+// Errors as a percent of the chill actually measured by Mar 1 (lower is better).
+const pctOf = (x: number | null | undefined) => (x === null || x === undefined ? "Not available" : `${x.toFixed(1)}%`);
+
 // The default view: how we tested, in plain words, with three headline numbers. Details on request.
 function SimpleAccuracy({ v }: { v: ValidationResponse }) {
   const [more, setMore] = useState(false);
   const est = Object.fromEntries(v.estimators.map((e) => [e.id, e]));
-  const ours = est[v.default_ids?.history ?? "E4"]?.mae_cp;
-  const nearest = est["E0"]?.mae_cp;
+  const ours = est[v.default_ids?.history ?? "E4"]?.mape_mar1;
+  const nearest = est["E0"]?.mape_mar1;
   const we = v.orchard_readings?.tests?.wildeye_orchard;
   const hs = v.orchard_readings?.tests?.hidden_station;
-  const withReadings = we?.scenarios?.readings_from_sep1?.mae_cp;
-  const atOrchards = we?.scenarios?.station_only?.mae_cp;
+  const withReadings = we?.scenarios?.readings_from_sep1?.mape_mar1;
+  const atOrchards = we?.scenarios?.station_only?.mape_mar1;
   const bt = v.backtest;
-  const f = (x: number | null | undefined) => (x === null || x === undefined ? "Not available" : x.toFixed(1));
   return (
     <div>
       <div className="grid gap-2 sm:grid-cols-3">
-        <Headline value={`${f(ours)} CP`} label="typical miss from weather stations alone (any spot, no readings)" />
-        <Headline value={`${f(withReadings)} CP`} label="typical miss when the orchard's own daily highs and lows are added" />
+        <Headline value={pctOf(atOrchards)} label="typical error from weather stations alone (lower is better)" />
+        <Headline value={pctOf(withReadings)} label="typical error with the orchard's own daily highs and lows (lower is better)" />
         <Headline value={`${v.n_station_seasons.toLocaleString()}`} label="real winters used to test it" />
       </div>
       <p className="mt-3 text-[14px] font-semibold">How we tested it, in plain terms</p>
       <ul className="mt-1.5 list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed">
         <li>
-          <strong>We hid real weather stations, one at a time.</strong> For each hidden station we estimated its chill from all the others, exactly the way the
-          app estimates your orchard, then compared with what the station really measured. {v.n_stations} stations, {v.n_station_seasons} winters.
+          <strong>We hid real weather stations, one at a time,</strong> estimated each from all the others the way the app estimates your orchard, and compared
+          with what it really measured. {v.n_stations} stations, {v.n_station_seasons} winters.
         </li>
         <li>
-          <strong>Our method beat simply using the nearest station:</strong> a typical miss of {f(ours)} chill portions against {f(nearest)}.
+          <strong>Our method beat using the nearest station:</strong> {pctOf(ours)} typical error against {pctOf(nearest)} (lower is better).
         </li>
         {we && (
           <li>
-            <strong>We repeated the test inside {we.n_sites} real pistachio orchards</strong> that have their own weather stations (Wildeye in-orchard sensors, data from the UC Fruit &amp; Nut Research and Information Center; not CIMIS stations).
-            Stations alone missed by {f(atOrchards)}; adding the orchard&apos;s own daily highs and lows brought it to {f(withReadings)}
-            {hs ? ` (${f(hs.scenarios.readings_from_sep1?.mae_cp)} at the hidden stations)` : ""}.
+            <strong>We repeated the test inside {we.n_sites} real pistachio orchards</strong> with their own weather stations (Wildeye in-orchard sensors, data from
+            the UC Fruit &amp; Nut Research and Information Center; not CIMIS stations). Stations alone: {pctOf(atOrchards)} error; with the orchard&apos;s daily highs
+            and lows: {pctOf(withReadings)}
+            {hs ? ` (${pctOf(hs.scenarios.readings_from_sep1?.mape_mar1)} at the hidden stations)` : ""}. Lower is better.
           </li>
         )}
         {bt.brier !== null && bt.brier_climatology !== null && (
           <li>
-            <strong>We checked the odds against what really happened.</strong> Replaying every past winter, our chances were more accurate than simply counting
-            how often past winters made it.
+            <strong>We checked the odds against what really happened.</strong> Replaying every past winter, our chances were{" "}
+            {Math.round((1 - bt.brier / bt.brier_climatology) * 100)}% more accurate than simply counting how often past winters made it (higher is better).
           </li>
         )}
         {v.diet_rule && (
           <li>
-            <strong>We tested missing days</strong> by deleting days from real records: {v.diet_rule.charAt(0).toLowerCase() + v.diet_rule.slice(1)}
+            <strong>We tested missing days</strong> by deleting days from real records: up to 30% of days missing, or gaps up to 4 days, keeps the error small.
           </li>
         )}
         <li>
-          <strong>The chill math itself matches UC&apos;s calculator.</strong> On the same weather data we get the same chill portions as the UC Fruit &amp; Nut
-          Research and Information Center, to three decimal places.
+          <strong>The chill math matches UC&apos;s calculator</strong> to three decimal places on the same weather data.
         </li>
         <li>
           <strong>Every &quot;give or take&quot; in the app comes from these tests:</strong> 8 in 10 test cases landed within it.

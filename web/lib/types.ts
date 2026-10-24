@@ -148,6 +148,7 @@ export interface AdviceResponse {
 }
 
 export interface OrchardReadingsScenario {
+  mape_mar1?: number;
   mae_cp: number;
   p80_cp: number;
   bias_cp: number;
@@ -211,6 +212,7 @@ export interface EstimatorScore {
   mae_cp: number | null;
   p80_cp: number | null;
   bias_cp: number | null;
+  mape_mar1?: number; // typical miss as a percent of the measured chill (lower is better)
 }
 
 export interface StationError {

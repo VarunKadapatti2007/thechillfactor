@@ -44,52 +44,41 @@ function Block({ id, icon, title, why, open = false, children }: { id: Tab; icon
   );
 }
 
-function KeyItem({ swatch, children }: { swatch: ReactNode; children: ReactNode }) {
-  return (
-    <li className="flex items-start gap-2.5">
-      <span aria-hidden className="mt-1 flex h-3 w-7 shrink-0 items-center justify-center">
-        {swatch}
-      </span>
-      <span>{children}</span>
-    </li>
-  );
+function Swatch({ className }: { className: string }) {
+  return <span aria-hidden className={`inline-block align-middle ${className}`} />;
 }
 
-// Plain-language key for the season chart: what each line and band means, then the takeaway.
+// A compact key, then the takeaway.
 function ChartKey({ p }: { p: PointResponse }) {
-  const { low, high } = p.need;
+  const { low } = p.need;
   const by = shortDate(p.need.by);
-  const need = low === high ? `${low}` : `${low} to ${high}`;
   const finished = p.asof >= p.need.by;
-  const where = p.outlook.p50 >= high ? "above" : p.outlook.p50 >= low ? "inside" : "below";
+  const pct = Math.round((p.outlook.p50 / low) * 100);
+  const where = p.outlook.p50 >= p.need.high ? "above" : p.outlook.p50 >= low ? "inside" : "below";
   return (
-    <div className="mt-3 rounded-[10px] bg-bg p-3 text-[13px] leading-relaxed">
-      <p className="font-semibold">How to read this chart</p>
-      <p className="mt-1 text-muted">
-        Chill only adds up through the winter, so every line climbs from left (September) to right (March). Higher means more chill.
-      </p>
-      <ul className="mt-2 space-y-1.5">
-        <KeyItem swatch={<span className="h-[3px] w-full rounded bg-[#3b7ea1]" />}>
-          <strong>Blue line:</strong> this winter&apos;s chill so far ({p.chill.to_date.toFixed(0)} chill portions as of {shortDate(p.asof)}).
-        </KeyItem>
+    <div className="mt-3 space-y-1.5 text-[12px] leading-relaxed">
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted">
+        <span className="font-semibold text-ink">Key:</span>
+        <span>
+          <Swatch className="mr-1 h-[3px] w-5 rounded bg-[#3b7ea1]" /> this winter
+        </span>
         {!finished && (
-          <KeyItem swatch={<span className="h-3 w-full rounded-sm bg-[#3b7ea1]/20" />}>
-            <strong>Shaded area and dashed line:</strong> where this winter is heading. The dashed line is the most likely path; 8 in 10 times it ends inside the
-            shading.
-          </KeyItem>
+          <span>
+            <Swatch className="mr-1 h-2.5 w-5 rounded-sm bg-[#3b7ea1]/20" /> likely path
+          </span>
         )}
-        <KeyItem swatch={<span className="h-[2px] w-full rounded bg-[#c4c9c3]" />}>
-          <strong>Grey lines:</strong> past winters at this same spot, one line per winter, for comparison.
-        </KeyItem>
-        <KeyItem swatch={<span className="h-3 w-full rounded-sm bg-[#3b7ea1]/10 ring-1 ring-[#3b7ea1]/30" />}>
-          <strong>Light band across the chart:</strong> what your trees need, {need} chill portions by {by}.
-        </KeyItem>
-      </ul>
-      <p className="mt-2">
+        <span>
+          <Swatch className="mr-1 h-[2px] w-5 rounded bg-[#c4c9c3]" /> past winters
+        </span>
+        <span>
+          <Swatch className="mr-1 h-2.5 w-5 rounded-sm bg-[#3b7ea1]/10 ring-1 ring-[#3b7ea1]/30" /> need by {by}
+        </span>
+      </p>
+      <p>
         <strong>The takeaway:</strong>{" "}
         {finished
-          ? `this winter reached ${p.outlook.p50.toFixed(0)} chill portions by ${by}, ${where} the need.`
-          : `if the blue line ends inside or above the band by ${by}, the trees get enough chill. Right now the most likely finish is about ${p.outlook.p50.toFixed(0)}, ${where} the band.`}
+          ? `this winter reached ${pct}% of the minimum need by ${by}, ${where} the need.`
+          : `if the blue line ends inside or above the band by ${by}, the trees get enough chill. Most likely finish: ${pct}% of the minimum need, ${where} the band.`}
       </p>
     </div>
   );

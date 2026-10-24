@@ -307,6 +307,7 @@ class EstimatorScore(_Model):
     mae_cp: Optional[float]
     p80_cp: Optional[float]
     bias_cp: Optional[float]
+    mape_mar1: Optional[float] = None  # typical miss as a percent of the measured chill (lower is better)
 
 
 class WildeyeEstimator(_Model):
