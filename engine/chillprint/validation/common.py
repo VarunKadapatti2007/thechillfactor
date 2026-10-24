@@ -15,6 +15,8 @@ from ..science.hourly import Window, borrowed_shape, linvill_series, window_minm
 
 OUT = C.VALIDATION_DIR
 BY_DATES = {"feb1": "02-01", "mar1": "03-01"}
+# Earlier as-of dates, used to scale the error bar through the season (errorbar.py).
+ASOF_DATES = {"nov1": "11-01", "dec1": "12-01", "jan1": "01-01"}
 CROSS = (23.0, 54.0)
 MIN_COVERAGE = 0.95
 MAX_GAP_H = 6
@@ -47,7 +49,7 @@ def cross_day(cum: np.ndarray, level: float) -> float:
 
 
 def metrics(cum: np.ndarray, season: int) -> dict:
-    out = {f"cp_{k}": float(cum[dos(season, v)]) for k, v in BY_DATES.items()}
+    out = {f"cp_{k}": float(cum[dos(season, v)]) for k, v in {**ASOF_DATES, **BY_DATES}.items()}
     for lv in CROSS:
         out[f"cross{int(lv)}"] = cross_day(cum, lv)
     return out

@@ -106,7 +106,7 @@ def point(lat: float, lon: float, crop: str, variety: str, asof: date | None = N
         "start": start,
         "method": method,
         "chill": {"to_date": round(float(ol.cp_obs), 2),
-                  "error_cp": None if glob else error_cp(pin, "live" if live else "history"),
+                  "error_cp": None if glob else error_cp(pin, "live" if live else "history", min(kd, dos(season, by_d))),
                   "series": series},
         "need": {"low": v.need_low, "high": v.need_high, "by": by_d.isoformat()},
         "outlook": {"p10": round(p10, 2), "p50": round(p50, 2), "p90": round(p90, 2),

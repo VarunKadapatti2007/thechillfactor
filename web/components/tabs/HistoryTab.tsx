@@ -57,7 +57,7 @@ export default function HistoryTab() {
       <Section
         title={`Met ${v.name}'s need in ${nMet} of ${complete.length} winters`}
         sentence={`Chill portions by ${mmddLabel(s.byOverride ?? v.by_date_default)} at this pin, every winter since ${seasonShort(h.winters[0].season)}.`}
-        info="Rebuilt from Daymet 1 km daily temperatures with the borrowed station shape. Bars are this pin, not a station."
+        info="Each winter uses the nearest station with a complete record, shifted to this pin by the Daymet 1 km monthly difference (the best method in our hidden-station test). Faded winters had no station record and are estimated from Daymet with a machine-learned daily curve (validated, 3.5 CP typical miss)."
       >
         <ResponsiveContainer width="100%" height={220}>
           <ComposedChart data={rows} margin={{ top: 8, right: 4, bottom: 0, left: -18 }} barCategoryGap={1}>
@@ -81,7 +81,7 @@ export default function HistoryTab() {
                     <div className="font-semibold">Winter {r.label}</div>
                     <div className="num">{r.cp_by.toFixed(1)} CP</div>
                     <div>{r.met_low ? "Met need" : "Missed need"}</div>
-                    {r.filled && <div className="text-muted">Partly estimated from the nearest station</div>}
+                    {r.filled && <div className="text-muted">No station record that winter: estimated from Daymet</div>}
                   </div>
                 );
               }}
@@ -98,7 +98,7 @@ export default function HistoryTab() {
           <li className="flex items-center gap-1">
             <span className="inline-block h-[2px] w-4 bg-ink" /> Trend
           </li>
-          {filled && <li>Faded bar: {seasonShort(filled.season)}, partly estimated</li>}
+          {filled && <li>Faded: no station record that winter (estimated, not in the trend)</li>}
         </ul>
         <button className="mt-2 text-[12px] text-chill underline" onClick={() => setTable(!table)}>
           {table ? "Hide table" : "Show table"}
@@ -165,7 +165,7 @@ export default function HistoryTab() {
           </div>
         </div>
         <p className="mt-2 text-[12px] text-muted">
-          Shares: need met in {Math.round(h.share_met_low * 10)} in 10 winters at the low end, {Math.round(h.share_met_high * 10)} in 10 at the high end.
+          Shares (complete winters): need met in {Math.round(h.share_met_low * 10)} in 10 winters at the low end, {Math.round(h.share_met_high * 10)} in 10 at the high end.
         </p>
       </Section>
 

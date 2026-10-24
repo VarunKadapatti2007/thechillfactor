@@ -243,7 +243,7 @@ def _synoptic_month(s, y: int, m: int):
     return df
 
 
-def build_cimis(st: pd.DataFrame, first: int, last: int, stations: list[str] | None = None) -> pd.DataFrame:
+def build_cimis(st: pd.DataFrame, first: int, last: int, stations: list[str] | None = None, workers: int = 3) -> pd.DataFrame:
     if not C.cimis_key():
         raise SystemExit("CIMIS_APP_KEY missing from .env; hourly pull skipped")
     today = date.today()
@@ -254,12 +254,23 @@ def build_cimis(st: pd.DataFrame, first: int, last: int, stations: list[str] | N
     cv = cv.assign(_o=cv.id.map({C.DURHAM_ID: 0, "CIMIS-6": 1}).fillna(2)).sort_values(["_o", "nbr"])
     jobs = [(s, y) for s in cv.itertuples() for y in station_seasons(s, first, last)]
     log = []
-    for s, y in tqdm(jobs, desc=f"cimis {first}-{last}"):
+
+    def one(job):
+        s, y = job
         try:
-            log.append(pull_station_season(s, y, today))
+            return pull_station_season(s, y, today)
         except Exception as e:
             print(f"  {s.id} {y}: {e}", file=sys.stderr)
             time.sleep(5)
+            return None
+
+    # A few workers share one global throttle (request starts >= 0.3 s apart); CIMIS latency
+    # varies from 0.4 to 5 s per month, so this keeps the pull polite but not serial-bound.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for r in tqdm(ex.map(one, jobs), total=len(jobs), desc=f"cimis {first}-{last}"):
+            if r:
+                log.append(r)
     df = pd.DataFrame(log)
     tag = f"{first}_{last}"
     df.to_csv(P / f"cimis_pull_log_{tag}.csv", index=False)

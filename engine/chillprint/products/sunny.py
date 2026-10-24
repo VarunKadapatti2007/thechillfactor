@@ -2,7 +2,11 @@
 
 Counts clear dormant days in the 14 days up to the as-of date, from the nearest
 CIMIS station's hourly solar radiation: a day is clear when its total radiation
-exceeds 70% of a clear-sky estimate (FAO-56: 0.75 x extraterrestrial radiation).
+exceeds 85% of a clear-sky estimate (FAO-56: 0.75 x extraterrestrial radiation).
+BUILD.md suggests 70% and calls it tunable: at 70% the flag fired on 65-71% of dormant mid-month
+dates (2005-2025, Shafter and Durham), too often to inform. Measured clear days sit at 0.85-0.92 of
+the estimate (Dec-Jan upper quartile 0.84-0.85), so 85% marks near-clear days; the flag then fires
+on 34-40% of dormant dates.
 Seven or more clear days in 14 -> "Sunny stretch: tree chill likely lower than
 shown" (UC Davis TreeChill research: sunlit buds run warmer than the air).
 """
@@ -15,7 +19,7 @@ import pandas as pd
 
 from ..pipeline import station_hourly as SH
 
-CLEAR_FRACTION = 0.70
+CLEAR_FRACTION = 0.85
 MIN_CLEAR_DAYS = 7
 DORMANT_MONTHS = (11, 12, 1, 2)
 

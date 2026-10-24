@@ -136,8 +136,8 @@ function LiveView({ p }: { p: PointResponse }) {
             <Tile
               label="Closest past winter"
               value={p.closest.season ? seasonShort(p.closest.season) : "Not available"}
-              sub={p.closest.rmse_cp !== null ? `curves differ by ${p.closest.rmse_cp.toFixed(1)} CP` : undefined}
-              info="The past winter whose chill curve over the last 30 days looks most like this one."
+              sub={p.closest.rmse_cp === null ? undefined : p.closest.rmse_cp < 0.05 && p.chill.to_date < 1 ? "no chill yet; matched on temperature" : `curves differ by ${p.closest.rmse_cp.toFixed(1)} CP`}
+              info="The past winter whose chill curve over the last 30 days looks most like this one. Before any chill has built up, the match uses daily temperatures instead."
             />
           </div>
         </div>

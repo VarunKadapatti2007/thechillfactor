@@ -33,6 +33,7 @@ LY_PER_DAY_TO_WM2 = 0.4843
 QC_KEEP = {"", " ", "Y", "P"}
 
 _last_call = {"t": 0.0}
+_throttle_lock = __import__("threading").Lock()
 
 
 def _num_after_slash(s: str) -> float:
@@ -58,10 +59,12 @@ def stations() -> pd.DataFrame:
 
 
 def _throttle() -> None:
-    dt = time.time() - _last_call["t"]
-    if dt < 0.3:
-        time.sleep(0.3 - dt)
-    _last_call["t"] = time.time()
+    """Global across threads: request starts are always at least 0.3 s apart (BUILD.md 3.2)."""
+    with _throttle_lock:
+        dt = time.time() - _last_call["t"]
+        if dt < 0.3:
+            time.sleep(0.3 - dt)
+        _last_call["t"] = time.time()
 
 
 def month_key(nbr: int, year: int, month: int, items: str = "hlyE3") -> str:

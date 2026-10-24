@@ -22,7 +22,7 @@ from .. import config as C
 from ..science import chill
 from ..sources import daymet
 from . import station_hourly as SH
-from .build_pin import _daymet_station, monthly_offset, offset_hourly, rebuild_record, season_stamps
+from .build_pin import _daymet_station, monthly_offset, offset_hourly, season_e4, season_stamps
 
 GRID_DIR = C.PROCESSED_DIR / "grid"
 GRID_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,6 +37,7 @@ OUTLINE = [
     (39.80, -122.50), (40.30, -122.55),
 ]
 BY_DATES = ("02-01", "02-15", "03-01")
+SAFE_YEARS = (2005, 2024)  # winters 2005-06 .. 2024-25, as on the land history card
 
 
 def inside(lat: float, lon: float) -> bool:
@@ -61,23 +62,26 @@ def candidates(step_lat: float) -> list[tuple[float, float]]:
 
 
 def point_values(lat: float, lon: float) -> dict | None:
+    """Safe winter chill (P10 of CP by each by date, 2005-06 .. 2024-25 winters) with the default
+    history method (E4); winters without a complete station record are skipped."""
     dm, meta = daymet.daily(lat, lon)
     elev = meta.get("elev_m")
     if elev is None or elev >= 600:
         return {"lat": lat, "lon": lon, "elev_m": elev, "skip": True}
-    win = SH.window_for("daymet")
     cps = {b: [] for b in BY_DATES}
-    rec, _ = rebuild_record(lat, lon, dm, win)
-    for y in range(C.FIRST_SEASON, C.LAST_COMPLETE_DAYMET_SEASON + 1):
-        arr = rec.reindex(season_stamps(y)).interpolate(limit_direction="both").to_numpy()
-        cum = np.cumsum(chill.dynamic_portions(arr)[0])[23::24]
+    offsets: dict = {}
+    for y in range(SAFE_YEARS[0], SAFE_YEARS[1] + 1):
+        e4 = season_e4(lat, lon, dm, y, offsets)
+        if e4 is None:
+            continue
+        cum = np.cumsum(chill.dynamic_portions(e4[0])[0])[23::24]
         for b in BY_DATES:
             k = (C.by_date(y, b) - date(y, 9, 1)).days
             cps[b].append(float(cum[k]))
-    out = {"lat": lat, "lon": lon, "elev_m": elev, "skip": False}
+    out = {"lat": lat, "lon": lon, "elev_m": elev, "skip": False, "n_winters": len(cps[BY_DATES[0]])}
     for b in BY_DATES:
         v = np.array(cps[b])
-        out[f"safe_{b.replace('-', '')}"] = float(np.percentile(v, 10)) if len(v) else np.nan
+        out[f"safe_{b.replace('-', '')}"] = float(np.percentile(v, 10)) if len(v) >= 10 else np.nan
     out["chill_so_far"] = _chill_so_far(lat, lon, dm)
     return out
 
@@ -111,7 +115,7 @@ def write_layers(df: pd.DataFrame) -> None:
                   "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [r.lon, r.lat]},
                                 "properties": {"value": round(float(getattr(r, c)), 1)}} for r in sub.itertuples()],
                   "sources": [C.SOURCES["daymet"], C.SOURCES["cimis"]],
-                  "method": f"{'P10 of CP by ' + v.by_date_default + ', winters 1980-81 to 2024-25' if layer == 'safe_chill' else 'E4 chill so far'}"}
+                  "method": f"{'E4; P10 of CP by ' + v.by_date_default + ', winters 2005-06 to 2024-25' if layer == 'safe_chill' else 'E4 chill so far'}"}
             (GRID_DIR / f"{layer}_{v.id}.json").write_text(json.dumps(fc, separators=(",", ":")), encoding="utf-8")
 
 

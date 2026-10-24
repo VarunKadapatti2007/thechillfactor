@@ -51,8 +51,20 @@ def history(pin: Pin, low: float, high: float, by_mmdd: str, start: str = "sep1"
     else:
         label = "likely decline" if slope < 0 else "likely increase"
 
-    early = vals[(yrs >= 1980) & (yrs <= 1999)]
-    recent = vals[(yrs >= 2005) & (yrs <= 2024)]
+    # Safe chill windows: complete (E4) winters when there are at least 10, else every winter in the window.
+    all_yrs = np.array([C.season_start_year(w["season"]) for w in winters], dtype=float)
+    all_vals = np.array([w["cp_by"] for w in winters], dtype=float)
+    notes = []
+
+    def window(a: int, b: int, label: str) -> np.ndarray:
+        v = vals[(yrs >= a) & (yrs <= b)]
+        if len(v) >= 10:
+            return v
+        notes.append(f"{label} includes estimated winters")
+        return all_vals[(all_yrs >= a) & (all_yrs <= b)]
+
+    early = window(1980, 1999, "1981-2000")
+    recent = window(2005, 2024, "2006-2025")
     e10, eci = safe_chill(early)
     r10, rci = safe_chill(recent)
     cur = C.current_season()
@@ -73,11 +85,14 @@ def history(pin: Pin, low: float, high: float, by_mmdd: str, start: str = "sep1"
         },
         "links": [{"title": t, "url": u} for t, u in C.LINKS_2050],
         "sources": pin.sources + [C.CROP_SOURCE],
-        "method": _method_summary(pin),
+        "method": _method_summary(pin) + ("; safe chill " + ", ".join(notes) if notes else ""),
     }
 
 
 def _method_summary(pin: Pin) -> str:
-    ys = pin.complete_seasons()
-    e3 = sum(1 for y in ys if pin.method.get(y) == "E3")
-    return f"E3 ({e3} of {len(ys)} winters with a station shape; others Method L)" if e3 < len(ys) else "E3"
+    ys = [y for y in pin.history_seasons()]
+    e4 = sum(1 for y in ys if str(pin.method.get(y, "")).startswith("E4"))
+    if e4 == len(ys):
+        return "E4 (nearest station with a complete record + Daymet offset)"
+    fb = sorted({str(pin.method[y]).split(" (")[0] for y in ys if not str(pin.method.get(y, "")).startswith("E4")})
+    return f"E4 for {e4} of {len(ys)} winters; the rest {', '.join(fb)} (no station record), shown faded"

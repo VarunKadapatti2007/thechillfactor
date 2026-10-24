@@ -27,7 +27,13 @@ from . import station_hourly as SH
 
 PIN_DIR = C.PROCESSED_DIR / "pins"
 PIN_DIR.mkdir(parents=True, exist_ok=True)
-VERSION = 4
+VERSION = 5
+# Default history and live method, chosen by the hidden-station test (validation/REPORT.md):
+# E4 = nearest station with a complete record that winter + Daymet monthly offset.
+HISTORY_METHOD = "E4"
+# Winters with no complete station record: "E2" (Daymet + Linvill curve) or "ML" (Daymet + ML
+# hourly shape, Phase 6 step 2; 3.55 vs 4.20 CP on the same 832 hidden station-winters).
+FALLBACK_METHOD = "ML"
 N_STATIONS = 3
 
 
@@ -60,7 +66,8 @@ class Pin:
         return pin_key(self.lat, self.lon)
 
     def complete_seasons(self) -> list[int]:
-        return [y for y in sorted(self.hourly) if not self.filled.get(y) and y <= C.LAST_COMPLETE_DAYMET_SEASON]
+        """Winters usable as analogs: complete records (E4), not fallback estimates or the live season."""
+        return [y for y in sorted(self.hourly) if not self.filled.get(y) and y <= C.LAST_COMPLETE_DAYMET_SEASON + 1]
 
     def history_seasons(self) -> list[int]:
         return [y for y in sorted(self.hourly) if y <= C.LAST_COMPLETE_DAYMET_SEASON + 1]
@@ -136,6 +143,58 @@ def rebuild_record(lat, lon, pin_daily, win: Window, exclude=(), k: int = 5):
     return lin, pd.Series(-1, index=d.index)
 
 
+def _fallback_record(lat: float, pin_daily: pd.DataFrame) -> tuple[pd.Series, str]:
+    """Hours for winters without a complete station record."""
+    from ..science import ml_shape
+    if FALLBACK_METHOD == "ML" and ml_shape.available():
+        return ml_shape.ml_hours(lat, pin_daily, SH.window_for("daymet")), "Daymet + ML shape"
+    return linvill_series(lat, pin_daily[["tmin", "tmax"]].interpolate(limit_direction="both")), "E2"
+
+
+@lru_cache(maxsize=4096)
+def station_season_parts(sid: str, y: int):
+    """A station-season split for fast E4: hours (days x 24), position of each hour between the
+    day's low and high (0.5 on flat days), and each hour's calendar month."""
+    stamps = season_stamps(y)
+    seg = SH.station_hourly(sid).reindex(stamps).interpolate(limit=6, limit_area="inside")
+    a = seg.to_numpy(dtype=np.float64).reshape(-1, 24)
+    with np.errstate(all="ignore"), __import__("warnings").catch_warnings():
+        __import__("warnings").simplefilter("ignore", RuntimeWarning)
+        lo = np.nanmin(a, axis=1, keepdims=True)
+        hi = np.nanmax(a, axis=1, keepdims=True)
+    rng = hi - lo
+    pos = np.where(rng > 0.1, (a - lo) / np.where(rng > 0.1, rng, 1.0), 0.5)
+    pos = np.nan_to_num(np.clip(pos, 0, 1), nan=0.5)
+    months = stamps.month.to_numpy().reshape(-1, 24)
+    return a, pos, months
+
+
+def e4_hours_fast(sid: str, y: int, off: pd.DataFrame) -> np.ndarray:
+    """E4 hours for a season: station hours + shape-aware monthly offset (same math as offset_hourly)."""
+    a, pos, months = station_season_parts(sid, y)
+    dmin = off["tmin"].reindex(range(1, 13)).fillna(0).to_numpy()[months - 1]
+    dmax = off["tmax"].reindex(range(1, 13)).fillna(0).to_numpy()[months - 1]
+    out = (a + dmin + pos * (dmax - dmin)).ravel()
+    if np.isnan(out).any():
+        out = pd.Series(out).interpolate(limit_direction="both").to_numpy()
+    return out
+
+
+def season_e4(lat, lon, pin_daily, y: int, offsets: dict) -> tuple[np.ndarray, str, float] | None:
+    """E4 for one complete winter: nearest station with >= 95% of hours that winter, plus the
+    Daymet monthly pin-minus-station offset. Returns (hours, label, distance km) or None."""
+    comp = SH.complete_seasons()
+    near = SH.nearest_cimis(lat, lon, with_hourly=True, k=40)
+    for s in near.itertuples():
+        if y not in comp.get(s.id, ()):
+            continue
+        if s.id not in offsets:
+            offsets[s.id] = monthly_offset(pin_daily, _daymet_station(s.id, s.lat, s.lon))
+        arr = e4_hours_fast(s.id, y, offsets[s.id])
+        return arr, f"E4 from {s.name} ({s.dist_km:.0f} km)", float(s.dist_km)
+    return None
+
+
 def _fill_2025(lat, lon, pin_daily, win, arr2025, live_tag: str | None):
     """Jan 1 - Mar 31 2026 for the 2025-26 winter (Daymet ends 2025-12-31)."""
     stamps = season_stamps(2025)
@@ -201,7 +260,8 @@ def _live_season(lat, lon, pin_daily, today: date):
 def _version_tag() -> str:
     idx = SH.hourly_index()
     n = sum(len(v) for v in idx.values())
-    return f"v{VERSION}_h{n}_{SH.window_for('daymet').label()}"
+    comp = sum(len(v) for v in SH.complete_seasons().values())
+    return f"v{VERSION}_h{n}_c{comp}_{FALLBACK_METHOD}_{SH.window_for('daymet').label()}"
 
 
 @lru_cache(maxsize=32)
@@ -224,25 +284,24 @@ def build_pin(lat: float, lon: float, today: date | None = None) -> Pin:
     win = SH.window_for("daymet")
     near = SH.nearest_cimis(lat, lon, k=3)
     hourly, method, filled, share = {}, {}, {}, {}
-    rec, src = rebuild_record(lat, lon, pin_daily, win)
-    for y in range(C.FIRST_SEASON, C.LAST_COMPLETE_DAYMET_SEASON + 2):
-        arr = rec.reindex(season_stamps(y)).interpolate(limit_direction="both").to_numpy().copy()
-        if np.isnan(arr).all():
-            continue
-        sh = float((src.loc[f"{y}-09-01":f"{y + 1}-03-31"] >= 0).mean())
-        hourly[y], share[y] = arr, sh
-        method[y] = "E3" if sh >= 0.5 else "E2"
-        filled[y] = False
+    offsets: dict = {}
+    rec = None
     y25 = C.LAST_COMPLETE_DAYMET_SEASON + 1
-    if y25 in hourly:
-        arr25, fill = _fill_2025(lat, lon, pin_daily, win, hourly[y25], None)
-        if arr25 is None:  # no station hourly and gridMET unreachable: leave the winter out
-            for dct in (hourly, method, filled, share):
-                dct.pop(y25, None)
-        else:
-            hourly[y25] = arr25
-            method[y25] = f"{method[y25]} + {fill} (Jan-Mar 2026)"
-            filled[y25] = True
+    for y in range(C.FIRST_SEASON, y25 + 1):
+        e4 = season_e4(lat, lon, pin_daily, y, offsets)
+        if e4 is not None:
+            hourly[y], method[y], filled[y], share[y] = e4[0], e4[1], False, 1.0
+            continue
+        # No station has a complete record that winter (e.g. before CIMIS began in 1982):
+        # fall back to Daymet + Method L (E2) and mark the winter as estimated. Daymet ends
+        # Dec 2025, so 2025-26 is only available through E4.
+        if y >= y25:
+            continue
+        if rec is None:
+            rec, fb_label = _fallback_record(lat, pin_daily)
+        arr = rec.reindex(season_stamps(y)).interpolate(limit_direction="both").to_numpy().copy()
+        if not np.isnan(arr).all():
+            hourly[y], method[y], filled[y], share[y] = arr, f"{fb_label} (no station record that winter)", True, 0.0
     live_until = None
     cur = C.season_of(today)
     if cur > y25:

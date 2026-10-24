@@ -112,4 +112,6 @@ Run 2026-10-24 on Wildeye in-orchard hourly vs Daymet at the station pixels (26 
 | 4 am to 4 am | -1 | 0.912 | 0.927 | 0.920 |
 | midnight to midnight | -1 | 0.886 | 0.927 | 0.906 |
 
-**Chosen: midnight-to-midnight PST, lag 0.** Daymet's day label matches the calendar day. To be re-run on CIMIS hourly once the key arrives (the script uses CIMIS automatically when present).
+**Chosen: midnight-to-midnight PST, lag 0.** Daymet's day label matches the calendar day.
+
+Re-run 2026-10-24 01:55 on CIMIS hourly (40 stations, 131,107 Sept-Mar days, 2005-2025): the same window wins, **r = 0.951 Tmin, 0.986 Tmax** (mean 0.969). Full table in `engine/data/processed/alignment.json`.

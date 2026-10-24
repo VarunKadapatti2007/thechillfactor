@@ -163,6 +163,27 @@ def score_wildeye(T: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def compare_with_default(hid: pd.DataFrame, we: pd.DataFrame, default: str = "E4") -> dict:
+    """E7 against the shipped default on the same cases (BUILD.md: ship only if it beats the default)."""
+    mae = lambda e: float(pd.concat([e.err_feb1, e.err_mar1]).abs().mean())  # noqa: E731
+    hs = pd.read_parquet(V.OUT / "validation_by_station.parquet")
+    d = hs[hs.estimator == default].set_index(["station_id", "season"])
+    h7 = hid.set_index(["station_id", "season"])
+    idx = h7.index.intersection(d.index)
+    w = pd.read_parquet(V.OUT / "wildeye_results.parquet")
+    wd = w[w.estimator == default].set_index(["station_id", "season"])
+    w7 = we[we.estimator == "E7"].set_index(["station_id", "season"])
+    widx = w7.index.intersection(wd.index)
+    res = {"default": default, "hidden_n": int(len(idx)),
+           "hidden_default_mae": round(mae(d.loc[idx]), 3), "hidden_e7_mae": round(mae(h7.loc[idx]), 3),
+           "wildeye_n": int(len(widx)),
+           "wildeye_default_mae": round(mae(wd.loc[widx]), 3) if len(widx) else None,
+           "wildeye_e7_mae": round(mae(w7.loc[widx]), 3) if len(widx) else None}
+    res["beats_default_hidden"] = res["hidden_e7_mae"] < res["hidden_default_mae"]
+    res["beats_default_wildeye"] = bool(len(widx)) and res["wildeye_e7_mae"] < res["wildeye_default_mae"]
+    return res
+
+
 def run() -> dict:
     T = build_table()
     T.to_parquet(V.OUT / "e7_table.parquet", index=False)
@@ -185,9 +206,8 @@ def run() -> dict:
                       "e7_bias": round(float(pd.concat([h7.err_feb1, h7.err_mar1]).mean()), 3)}}
     if len(we):
         out["wildeye"] = {k: round(mae(g), 3) for k, g in we.groupby("estimator")}
-    beats_hidden = out["hidden"]["e7_mae"] < out["hidden"]["e3_mae"]
-    beats_we = "wildeye" in out and out["wildeye"].get("E7", 9e9) < out["wildeye"].get("E3", -1)
-    out["ship"] = bool(beats_hidden and beats_we)
+    out.update(compare_with_default(hid, we))
+    out["ship"] = bool(out["beats_default_hidden"] and out["beats_default_wildeye"])
     (V.OUT / "e7_summary.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
     print(json.dumps(out, indent=1))
     return out

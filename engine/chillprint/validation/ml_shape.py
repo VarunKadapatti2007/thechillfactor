@@ -50,12 +50,12 @@ def _station_days(sid: str, seasons: list[int], win) -> pd.DataFrame:
         d = dm.reindex(days)
         for i in np.flatnonzero(ok):
             rows.append(np.column_stack([np.arange(24), np.full(24, dl[i]), np.full(24, d["tmax"].iloc[i] - d["tmin"].iloc[i]),
-                                         np.full(24, d["srad"].iloc[i]), np.full(24, days[i].month), np.full(24, st.lat),
-                                         pos[i], np.full(24, hash(sid) % 100000)]))
+                                         np.full(24, d["srad"].iloc[i]), np.full(24, days[i].month), np.full(24, float(st.lat)),
+                                         pos[i]]).astype(np.float64))
     if not rows:
-        return pd.DataFrame(columns=FEATURES + ["target", "group"])
-    a = np.vstack(rows)
-    return pd.DataFrame(a, columns=FEATURES + ["target", "group"])
+        return pd.DataFrame(columns=FEATURES + ["target"])
+    a = np.vstack(rows).astype(np.float64)
+    return pd.DataFrame(a, columns=FEATURES + ["target"])
 
 
 def build_table(max_rows: int = 1_500_000) -> pd.DataFrame:
@@ -65,6 +65,7 @@ def build_table(max_rows: int = 1_500_000) -> pd.DataFrame:
         by_st.setdefault(s, []).append(y)
     frames = [_station_days(s, ys, win).assign(station_id=s) for s, ys in tqdm(sorted(by_st.items()), desc="shape rows")]
     T = pd.concat(frames, ignore_index=True)
+    T[FEATURES + ["target"]] = T[FEATURES + ["target"]].astype(np.float64)
     if len(T) > max_rows:  # subsample whole days evenly (keep 24-hour blocks intact)
         days = len(T) // 24
         keep = np.random.default_rng(C.SEED).choice(days, size=max_rows // 24, replace=False)
@@ -108,11 +109,26 @@ def run(n_folds: int = 8) -> dict:
                 m, tm = V.metrics(V.daily_cum(hrs), y), V.metrics(truth, y)
                 rows.append({"station_id": sid, "season": y, "err_feb1": m["cp_feb1"] - tm["cp_feb1"],
                              "err_mar1": m["cp_mar1"] - tm["cp_mar1"]})
-    R = pd.DataFrame(rows).set_index(["station_id", "season"])
-    common = R.index.intersection(e3.index)
-    mae = lambda d: float(pd.concat([d.err_feb1, d.err_mar1]).abs().mean())  # noqa: E731
-    out = {"n": int(len(common)), "method_b_mae": round(mae(e3.loc[common]), 3), "ml_shape_mae": round(mae(R.loc[common]), 3)}
+    R = pd.DataFrame(rows)
+    R.to_parquet(V.OUT / "ml_shape_hidden.parquet", index=False)
+    R = R.set_index(["station_id", "season"])
+    by = {e: hs[hs.estimator == e].set_index(["station_id", "season"]) for e in ("E2", "E3", "E4")}
+    common = R.index
+    for d in by.values():
+        common = common.intersection(d.index)
+    errs = lambda d: pd.concat([d.err_feb1, d.err_mar1])  # noqa: E731
+    out = {"n": int(len(common))}
+    for name, d in (("ml_shape", R), *[(k, v) for k, v in by.items()]):
+        e = errs(d.loc[common])
+        out[name] = {"mae": round(float(e.abs().mean()), 3), "p80": round(float(e.abs().quantile(0.8)), 3), "bias": round(float(e.mean()), 3)}
+    out["method_b_mae"] = out["E3"]["mae"]
+    out["ml_shape_mae"] = out["ml_shape"]["mae"]
     out["ship"] = out["ml_shape_mae"] < out["method_b_mae"]
+    # Final model on every station, for production use in the no-station-record fallback.
+    model = lgb.LGBMRegressor(**PARAMS).fit(T[FEATURES], T["target"])
+    mdir = C.PROCESSED_DIR / "models"
+    mdir.mkdir(parents=True, exist_ok=True)
+    model.booster_.save_model(str(mdir / "ml_shape.txt"))
     (V.OUT / "ml_shape_summary.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
     print(json.dumps(out, indent=1))
     return out

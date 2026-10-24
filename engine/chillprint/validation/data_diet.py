@@ -113,15 +113,16 @@ def summarize(df: pd.DataFrame) -> tuple[list[dict], str | None]:
                 curve.append({"missing_pct": float(frac), "gap_days": float(block),
                               "mae_cp": round(float(sub.err.abs().mean()), 2),
                               "p80_cp": round(float(sub.err.abs().quantile(0.8)), 2)})
-    rnd = [c for c in curve if c["gap_days"] == 1]
-    ok_pct = [c["missing_pct"] for c in rnd if c["p80_cp"] < 2.0]
+    # Rule on the typical (mean absolute) error; the P80 is reported alongside so the rule is not
+    # read as a guarantee. N: largest scattered-missing share before the first failure; K: longest gap.
+    rnd = sorted([c for c in curve if c["gap_days"] == 1], key=lambda c: c["missing_pct"])
     n_pct = None
-    for c in sorted(rnd, key=lambda c: c["missing_pct"]):  # largest fraction before the first failure
-        if c["p80_cp"] < 2.0:
+    for c in rnd:
+        if c["mae_cp"] < 2.0:
             n_pct = c["missing_pct"]
         else:
             break
-    by_gap = df.groupby("longest_gap").err.apply(lambda e: e.abs().quantile(0.8))
+    by_gap = df[df.missing_pct > 0].groupby("longest_gap").err.apply(lambda e: e.abs().mean())
     k_days = None
     for g in sorted(by_gap.index):
         if g == 0:
@@ -130,14 +131,13 @@ def summarize(df: pd.DataFrame) -> tuple[list[dict], str | None]:
             k_days = int(g)
         else:
             break
-    if base0.err.abs().quantile(0.8) >= 2.0:
-        rule = (f"Even with no gaps, one daily reading misses by up to {base0.err.abs().quantile(0.8):.1f} CP "
-                f"in 8 of 10 winters, so no gap rule keeps error under 2 CP here.")
-    elif n_pct is not None and k_days is not None:
-        rule = f"Up to {int(n_pct)}% missing days, or gaps up to {k_days} days, keeps error under 2 CP in 8 of 10 winters."
+    base_mae = float(base0.err.abs().mean())
+    base_p80 = float(base0.err.abs().quantile(0.8))
+    if n_pct is not None and k_days is not None and base_mae < 2.0:
+        rule = (f"Up to {int(n_pct)}% missing days scattered through the winter, or gaps up to {k_days} days, keeps the "
+                f"typical error under 2 CP (with no gaps, 8 in 10 winters land within {base_p80:.1f} CP).")
     else:
-        rule = None
-    _ = ok_pct
+        rule = f"One daily reading misses by {base_mae:.1f} CP typically even with no gaps, so no gap rule keeps it under 2 CP."
     return curve, rule
 
 

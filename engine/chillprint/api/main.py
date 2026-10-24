@@ -32,6 +32,8 @@ app = FastAPI(title="ChillPrint API", version="0.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
 CACHE = C.PROCESSED_DIR / "api_cache"
+# Code fingerprint: responses cached by an older engine are never served after a code change.
+CODE_TAG = str(int(max(f.stat().st_mtime for f in (C.ENGINE_DIR / "chillprint").rglob("*.py"))))
 CACHE.mkdir(parents=True, exist_ok=True)
 GRID_DIR = C.PROCESSED_DIR / "grid"
 
@@ -48,7 +50,7 @@ def _clean(o):
 
 
 def _cached(name: str, params: dict, build, model=None):
-    tag = f"{_version_tag()}|{date.today()}"
+    tag = f"{_version_tag()}|{CODE_TAG}|{date.today()}"
     key = hashlib.sha1(json.dumps([name, params, tag], sort_keys=True, default=str).encode()).hexdigest()[:24]
     p = CACHE / f"{name}_{key}.json"
     if p.exists():

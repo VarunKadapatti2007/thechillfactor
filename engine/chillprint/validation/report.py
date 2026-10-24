@@ -46,7 +46,9 @@ def summarize() -> dict:
     hc = hs.set_index(["station_id", "season"]).loc[common_idx].reset_index()
     scores = {e: _score(hc[hc.estimator == e]) for e in present}
 
-    cand_hist = [e for e in ("E3", "E2") if e in scores]
+    # History default: the best estimator that yields hours for any past winter (E4 needs a station
+    # with a complete record that winter; E3/E2 need only Daymet). Chosen by MAE on the headline set.
+    cand_hist = [e for e in ("E4", "E3", "E2") if e in scores]
     hist_id = min(cand_hist, key=lambda e: scores[e]["mae_cp"]) if cand_hist else "E0"
     # Live season: E4 when station hourly exists. Keyless, the live estimate is gridMET + Method L,
     # whose closest validated analog is E2 (gridded daily + textbook curve).
@@ -121,17 +123,39 @@ def summarize() -> dict:
             row[f"{e.lower()}_mae"] = round(float(ge.err_mar1.abs().mean()), 2) if len(ge) else None
         by_station.append(row)
 
+    # E7 (Phase 6): shown either way; scored on the same station-seasons it shares with the headline set.
+    e7_entry, e7_info = None, None
+    if (V.OUT / "e7_summary.json").exists() and (V.OUT / "e7_hidden.parquet").exists():
+        e7_info = json.loads((V.OUT / "e7_summary.json").read_text(encoding="utf-8"))
+        h7 = pd.read_parquet(V.OUT / "e7_hidden.parquet").set_index(["station_id", "season"])
+        idx = h7.index.intersection(common_idx)
+        if len(idx):
+            e = pd.concat([h7.loc[idx].err_feb1, h7.loc[idx].err_mar1])
+            e7_entry = {"id": "E7", "name": "Daymet + ML night-low fix" + ("" if e7_info.get("ship") else " (not shipped)"),
+                        "mae_cp": round(float(e.abs().mean()), 2), "p80_cp": round(float(e.abs().quantile(0.8)), 2),
+                        "bias_cp": round(float(e.mean()), 2)}
+
     e5_note = None
     if "E5" in scores and "E0" in scores:
         e5_note = (f"Adding one daily low and high at the orchard cuts the typical miss from "
                    f"{scores['E0']['mae_cp']:.1f} CP (nearest station) to {scores['E5']['mae_cp']:.1f} CP.")
 
     findings = _findings(scores, hist_id, live_id, we_scores, bt, bt_full, dd_rule, mode)
+    ml_shape_info = None
+    if (V.OUT / "ml_shape_summary.json").exists():
+        ml_shape_info = json.loads((V.OUT / "ml_shape_summary.json").read_text(encoding="utf-8"))
+        findings.append(f"Phase 6: an ML hourly shape on Daymet scores {ml_shape_info['ml_shape']['mae']:.2f} CP vs "
+                        f"{ml_shape_info['E3']['mae']:.2f} for the borrowed shape and {ml_shape_info['E2']['mae']:.2f} for the textbook curve "
+                        f"({ml_shape_info['n']} station-winters); it replaces the textbook curve for winters with no station record.")
+    if e7_info:
+        findings.append(f"Phase 6: the ML night-low fix (E7) improves Daymet ({e7_info['hidden_e7_mae']:.2f} vs E3 {e7_info['hidden']['e3_mae']:.2f} CP) "
+                        f"but does not beat the {e7_info['default']} default ({e7_info['hidden_default_mae']:.2f}); not shipped.")
     summary = {
         "n_stations": int(hc.station_id.nunique()),
         "n_station_seasons": int(hc[["station_id", "season"]].drop_duplicates().shape[0]),
         "estimators": [{"id": e, "name": hidden_station.NAMES[e], "mae_cp": scores[e]["mae_cp"],
-                        "p80_cp": scores[e]["p80_cp"], "bias_cp": scores[e]["bias_cp"]} for e in present],
+                        "p80_cp": scores[e]["p80_cp"], "bias_cp": scores[e]["bias_cp"]} for e in present]
+                      + ([e7_entry] if e7_entry else []),
         "wildeye": {"n_stations": we_n, "estimators": we_scores},
         "durham": {"winters": winters},
         "data_diet": [{"missing_pct": c["missing_pct"], "gap_days": c["gap_days"], "mae_cp": c["mae_cp"]} for c in dd_curve],
@@ -144,7 +168,7 @@ def summarize() -> dict:
         "e5_note": e5_note,
         "findings": findings,
         "mode": mode,
-        "details": {"scores": scores, "by_distance": by_dist, "by_terrain": by_ter, "durham_mae": durham_err,
+        "details": {"e7": e7_info, "ml_shape": ml_shape_info, "scores": scores, "by_distance": by_dist, "by_terrain": by_ter, "durham_mae": durham_err,
                     "backtest": bt_full, "data_diet_curve": dd_curve, "data_diet_station_seasons": dd_n},
         "sources": [C.SOURCES["cimis"], C.SOURCES["fnric"], C.SOURCES["daymet"]],
         "method": "hidden-station validation (BUILD.md section 5)",
@@ -166,11 +190,11 @@ def _findings(scores, hist_id, live_id, we, bt, bt_full, rule, mode) -> list[str
         f.append(f"One daily reading at the orchard (E5) brings the typical miss to {scores['E5']['mae_cp']:.1f} CP.")
     if bt.get("brier") is not None:
         better = bt["brier"] < bt["brier_climatology"]
-        f.append(f"The outlook {'beats' if better else 'does not beat'} climatology: Brier {bt['brier']:.3f} vs {bt['brier_climatology']:.3f}.")
+        f.append(f"The outlook {'beats' if better else 'does not beat'} climatology: Brier {bt['brier']:.4f} vs {bt['brier_climatology']:.4f}.")
     if bt_full:
         bc = bt_full["by_climate"]
         f.append(f"Today's-climate shift is {'on' if bt_full['default_climate'] == 'today' else 'off'} by default "
-                 f"(Brier {bc['today']['brier']:.3f} with, {bc['recorded']['brier']:.3f} without).")
+                 f"(Brier {bc['today']['brier']:.4f} with, {bc['recorded']['brier']:.4f} without).")
     if we:
         f.append("At Wildeye in-orchard stations: " + ", ".join(f"{w['id']} {w['mae_cp']:.1f} CP" for w in we) + ".")
     if rule:
@@ -189,6 +213,9 @@ def _write_report(s: dict) -> None:
              "| Estimator | Mean abs error (CP) | Median | P80 | P90 | Bias | Days off at 23 CP | Days off at 54 CP | Hourly RMSE (°C) | GDD error Feb-Mar (°C-days) |",
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for e in s["estimators"]:
+        if e["id"] not in d["scores"]:
+            lines.append(f"| {e['id']} {e['name']} | {e['mae_cp']} | | {e['p80_cp']} | | {e['bias_cp']} | | | | |")
+            continue
         sc = d["scores"][e["id"]]
         lines.append(f"| {e['id']} {e['name']} | {sc['mae_cp']} | {sc['median_cp']} | {sc['p80_cp']} | {sc['p90_cp']} | {sc['bias_cp']} | "
                      f"{sc['cross23_days']} | {sc['cross54_days']} | {sc['hourly_rmse_c']} | {sc['gdd_mae']} |")

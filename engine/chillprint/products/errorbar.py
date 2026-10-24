@@ -42,8 +42,27 @@ def pin_context(pin: Pin) -> tuple[float, str]:
     return float(r.dist_km), terrain(pin.elev_m, None if r.elev_m != r.elev_m else float(r.elev_m))
 
 
-def error_cp(pin: Pin, method: str = "history") -> float | None:
-    """80th-percentile absolute CP error for this pin's distance and terrain bin, or None if not validated."""
+def _growth(table: dict, season_dos: int | None) -> float:
+    """Validated share of the by-date error reached by this point in the season (1.0 when unknown)."""
+    g = table.get("growth")
+    if not g or season_dos is None:
+        return 1.0
+    from datetime import date
+    xs, ys = [], []
+    for mmdd, v in g.items():
+        m, d = (int(x) for x in mmdd.split("-"))
+        xs.append((date(2001 if m >= 9 else 2002, m, d) - date(2001, 9, 1)).days)
+        ys.append(v)
+    order = sorted(range(len(xs)), key=lambda i: xs[i])
+    import numpy as np
+    return float(np.interp(season_dos, [xs[i] for i in order], [ys[i] for i in order]))
+
+
+def error_cp(pin: Pin, method: str = "history", season_dos: int | None = None) -> float | None:
+    """80th-percentile absolute CP error for this pin's distance and terrain bin, or None if not validated.
+
+    With `season_dos` (days since Sept 1), the by-date error is scaled by the validated
+    growth curve, so early-season chill so far carries the smaller error measured then."""
     m = _model()
     if not m:
         return None
@@ -55,4 +74,6 @@ def error_cp(pin: Pin, method: str = "history") -> float | None:
         v = table.get("by_distance", {}).get(dist_bin(km))
     if v is None:
         v = table.get("overall")
-    return None if v is None else round(float(v), 1)
+    if v is None:
+        return None
+    return round(float(v) * _growth(table, season_dos), 1)

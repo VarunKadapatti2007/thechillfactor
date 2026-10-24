@@ -131,7 +131,7 @@ def run_station(args) -> list[dict]:
                 ests["E0"]["gdd_err"] = _gdd_window(nb_d, y) - g_truth
         for k, m in ests.items():
             row = {**base, "estimator": k}
-            for key in ("cp_feb1", "cp_mar1"):
+            for key in ("cp_nov1", "cp_dec1", "cp_jan1", "cp_feb1", "cp_mar1"):
                 row[key] = m[key]
                 row[key.replace("cp_", "truth_")] = tm[key]
                 row[key.replace("cp_", "err_")] = m[key] - tm[key]

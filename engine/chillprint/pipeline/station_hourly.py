@@ -89,6 +89,20 @@ def nearest_cimis(lat: float, lon: float, exclude: tuple[str, ...] = (), with_ho
     return st.sort_values("dist_km").head(k)
 
 
+@lru_cache(maxsize=1)
+def complete_seasons() -> dict[str, set[int]]:
+    """station id -> seasons with >= 95% of hours Sept 1 - Mar 1 (from the QC coverage table)."""
+    p = C.PROCESSED_DIR / "hourly_coverage.parquet"
+    if not p.exists():
+        return {}
+    t = pd.read_parquet(p)
+    t = t[t.coverage >= 0.95]
+    out: dict[str, set[int]] = {}
+    for sid, y in zip(t.station_id, t.season):
+        out.setdefault(sid, set()).add(int(y))
+    return out
+
+
 def window_for(product: str = "daymet") -> Window:
     if ALIGN_JSON.exists():
         js = json.loads(ALIGN_JSON.read_text())
