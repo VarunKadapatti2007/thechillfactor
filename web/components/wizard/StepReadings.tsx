@@ -134,7 +134,7 @@ export default function StepReadings({ n }: { n: number }) {
         {before !== undefined && after !== undefined && (
           <>
             {" "}
-            In our tests at {test!.n_sites} real orchards, this cut the typical miss from <span className="num font-semibold">{before.toFixed(1)}</span> to{" "}
+            In our tests at {test!.n_sites} pistachio orchards with their own sensors (Wildeye stations, data from UC FNRIC), this cut the typical miss from <span className="num font-semibold">{before.toFixed(1)}</span> to{" "}
             <span className="num font-semibold">{after.toFixed(1)}</span> chill portions.
           </>
         )}

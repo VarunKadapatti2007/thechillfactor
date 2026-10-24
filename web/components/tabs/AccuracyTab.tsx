@@ -143,7 +143,7 @@ function SimpleAccuracy({ v }: { v: ValidationResponse }) {
         </li>
         {we && (
           <li>
-            <strong>We repeated the test inside {we.n_sites} real orchards</strong> that have their own temperature sensors (not part of the public network).
+            <strong>We repeated the test inside {we.n_sites} real pistachio orchards</strong> that have their own weather stations (Wildeye in-orchard sensors, data from the UC Fruit &amp; Nut Research and Information Center; not CIMIS stations).
             Stations alone missed by {f(atOrchards)}; adding the orchard&apos;s own daily highs and lows brought it to {f(withReadings)}
             {hs ? ` (${f(hs.scenarios.readings_from_sep1?.mae_cp)} at the hidden stations)` : ""}.
           </li>

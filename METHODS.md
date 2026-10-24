@@ -158,7 +158,7 @@ Daymet's daily low and high are turned into hours with a machine-learned daily c
 3. Compare with the station's own measured chill on Feb 1 and Mar 1.
 4. Repeat for 65 stations and 855 winters (2005–2025).
 
-**In-orchard test** [`validation/wildeye.py`, `orchard_readings.py`]: the same comparison at 18 Wildeye pistachio orchards (30 winters). These sensors are not in the public station network, so the test is independent.
+**In-orchard test** [`validation/wildeye.py`, `orchard_readings.py`]: the same comparison at 18 Wildeye pistachio orchards (30 winters). These are Wildeye in-orchard weather stations served by FNRIC's weather API, not CIMIS stations (whether gridded products such as Daymet use them is not confirmed).
 
 **Error bar shown in the app** [`products/errorbar.py`]:
 - The 80th-percentile miss: 8 in 10 tests land within it. It is grouped by distance to the nearest station (0–10, 10–25, 25–50, 50+ km) and terrain (foothill = above 150 m, or 100 m above the station).
