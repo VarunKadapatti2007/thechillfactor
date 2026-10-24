@@ -6,10 +6,11 @@ import { Layers } from "lucide-react";
 import { setWorkerUrl, type StyleSpecification } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Map, { Layer, Marker, NavigationControl, Popup, Source, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
-import { circlePolygon } from "@/lib/area";
 import { useData } from "@/lib/data";
 import { useStore, type GridLayer } from "@/lib/store";
 import { cn } from "./ui";
+
+const AERIAL_TILES = "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}";
 
 // The bundled worker URL breaks under Turbopack; serve the worker from public/ (copied on postinstall).
 setWorkerUrl("/maplibre-gl-worker.mjs");
@@ -109,14 +110,12 @@ export default function MapView() {
       if (!s.outlineClosed) d({ type: "outlineAdd", lon: e.lngLat.lng, lat: e.lngLat.lat });
       return;
     }
-    d({ type: "pin", pin: { lat: e.lngLat.lat, lon: e.lngLat.lng } });
+    // Zoom in to the farm, so the grower can see their fields to outline them.
+    d({ type: "pin", pin: { lat: e.lngLat.lat, lon: e.lngLat.lng }, fly: true });
   }
 
   const shapeGeo = useMemo(() => {
     const features: GeoJSON.Feature[] = [];
-    if (s.drawMode === "circle" && s.pin) {
-      features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circlePolygon(s.pin.lat, s.pin.lon, s.radiusKm)] } });
-    }
     if (s.drawMode === "outline" && s.outline.length) {
       const ring = s.outlineClosed ? [...s.outline, s.outline[0]] : s.outline;
       if (s.outlineClosed) features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } });
@@ -124,7 +123,7 @@ export default function MapView() {
       for (const v of s.outline) features.push({ type: "Feature", properties: { vertex: 1 }, geometry: { type: "Point", coordinates: v } });
     }
     return { type: "FeatureCollection" as const, features };
-  }, [s.drawMode, s.pin, s.radiusKm, s.outline, s.outlineClosed]);
+  }, [s.drawMode, s.outline, s.outlineClosed]);
   const showPin = s.pin && (s.drawMode !== "outline" || s.outlineClosed);
 
   function onMove(e: MapLayerMouseEvent) {
@@ -164,10 +163,17 @@ export default function MapView() {
         interactiveLayerIds={["st-cimis", "st-wildeye", ...(showErrors ? ["err"] : []), ...(s.layers.grid !== "off" ? ["grid"] : [])]}
         cursor={s.drawMode === "outline" && !s.outlineClosed ? "copy" : "crosshair"}
         attributionControl={{ compact: true }}
-        maxZoom={style === OFFLINE_STYLE ? 9 : 14}
+        maxZoom={style === OFFLINE_STYLE ? 9 : 17}
         minZoom={4}
       >
         <NavigationControl position="bottom-right" showCompass={false} />
+
+        {/* Aerial imagery when zoomed in, so a grower can see their fields to outline the farm (USGS, public domain). */}
+        {style !== OFFLINE_STYLE && (
+          <Source id="aerial" type="raster" tiles={[AERIAL_TILES]} tileSize={256} maxzoom={16} attribution="Imagery: USGS The National Map">
+            <Layer id="aerial" type="raster" minzoom={11} paint={{ "raster-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0, 12.5, 1] }} />
+          </Source>
+        )}
 
         {grid.data && s.layers.grid !== "off" && (
           <Source id="grid" type="geojson" data={grid.data as unknown as GeoJSON.FeatureCollection}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ExternalLink, TreeDeciduous } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, TreeDeciduous } from "lucide-react";
 import { useData } from "@/lib/data";
 import { EXPLAIN } from "@/lib/explain";
 import { mmddLabel } from "@/lib/format";
@@ -17,7 +17,7 @@ function longDate(mmdd: string) {
   return `${name} ${Number(d)}`;
 }
 
-export default function StepCrop() {
+export default function StepCrop({ collapsed, onEdit }: { collapsed?: boolean; onEdit?: () => void }) {
   const { s, d } = useStore();
   const { crops, validation } = useData();
   const list = crops.data?.crops ?? [];
@@ -28,7 +28,7 @@ export default function StepCrop() {
   const climate = s.climate ?? validation.data?.default_ids?.climate ?? "today";
 
   return (
-    <StepCard n={2} title="What are you growing?" done={!!variety}>
+    <StepCard n={2} title="Which crop are you growing?" done={!!variety} collapsed={collapsed} summary={variety && crop ? `${crop.name}, ${variety.name}` : ""} onEdit={onEdit}>
       {crops.loading && !list.length ? (
         <div className="flex gap-2">
           {[0, 1, 2, 3].map((i) => (
@@ -38,7 +38,6 @@ export default function StepCrop() {
       ) : (
         <div className="space-y-3">
           <div>
-            <div className="mb-1 text-[12px] font-semibold text-muted">Crop</div>
             <div role="radiogroup" aria-label="Crop" className="flex flex-wrap gap-1.5">
               {list.map((c) => {
                 const Icon = CROP_ICONS[c.icon] ?? TreeDeciduous;
@@ -48,13 +47,13 @@ export default function StepCrop() {
                     key={c.id}
                     role="radio"
                     aria-checked={on}
-                    onClick={() => d({ type: "crop", crop: c.id, variety: c.varieties[0].id })}
+                    onClick={() => d({ type: "crop", crop: c.id, variety: c.varieties.length === 1 ? c.varieties[0].id : null })}
                     className={cn(
-                      "inline-flex h-9 items-center gap-1.5 rounded-[8px] border px-2.5 text-[14px]",
+                      "inline-flex h-11 items-center gap-2 rounded-[10px] border px-3.5 text-[15px] font-medium",
                       on ? "border-brand bg-brand text-white" : "border-line bg-surface text-ink hover:bg-bg",
                     )}
                   >
-                    <Icon size={15} aria-hidden />
+                    <Icon size={17} aria-hidden />
                     {c.name}
                   </button>
                 );
@@ -64,45 +63,43 @@ export default function StepCrop() {
 
           {crop && (
             <div>
-              <label htmlFor="variety-select" className="mb-1 block text-[12px] font-semibold text-muted">
-                Variety
-              </label>
-              <select
-                id="variety-select"
-                value={s.variety ?? ""}
-                onChange={(e) => d({ type: "variety", variety: e.target.value })}
-                className="h-9 w-full rounded-[8px] border border-line bg-surface px-2 text-[14px]"
-              >
-                {crop.varieties.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
+              <div className="mb-1.5 text-[13px] font-semibold">Which type?</div>
+              <div role="radiogroup" aria-label="Variety" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {crop.varieties.map((v) => {
+                  const on = v.id === s.variety;
+                  return (
+                    <button
+                      key={v.id}
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => d({ type: "variety", variety: v.id })}
+                      className={cn(
+                        "flex min-h-[56px] flex-col items-start justify-center rounded-[10px] border-2 px-3 py-2 text-left",
+                        on ? "border-brand bg-brand/5" : "border-line hover:border-brand/50",
+                      )}
+                    >
+                      <span className="flex w-full items-center justify-between gap-1 text-[15px] font-semibold">
+                        {v.name}
+                        {on && <Check size={16} aria-hidden className="shrink-0 text-brand" />}
+                      </span>
+                      <span className="num text-[12px] text-muted">
+                        needs {v.need_low === v.need_high ? v.need_low : `${v.need_low}-${v.need_high}`} chill portions
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {variety && crop && (
-            <div className="rounded-[8px] bg-bg p-2.5 text-[13px] leading-relaxed">
-              <p>
-                <strong>{variety.name}</strong> {crop.name.toLowerCase()} needs about{" "}
-                <strong className="num">
-                  {variety.need_low === variety.need_high ? variety.need_low : `${variety.need_low} to ${variety.need_high}`} chill portions
-                </strong>{" "}
-                by <strong>{longDate(by)}</strong> to bloom well.
-              </p>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted">
-                <span className="inline-flex items-center gap-1">
-                  What&apos;s a chill portion? <InfoTip label="chill portions">{EXPLAIN.chillPortion}</InfoTip>
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  Why {longDate(by)}? <InfoTip label="the by date">{EXPLAIN.byDate}</InfoTip>
-                </span>
-                <a href={EXPLAIN.needSource} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-chill underline">
-                  Source: UC Cooperative Extension <ExternalLink size={11} aria-hidden />
-                </a>
-              </div>
-            </div>
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] text-muted">
+              Needed by {longDate(by)}.
+              <InfoTip label="chill portions">{EXPLAIN.chillPortion}</InfoTip>
+              <a href={EXPLAIN.needSource} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-chill underline">
+                Source: UC Cooperative Extension <ExternalLink size={11} aria-hidden />
+              </a>
+            </p>
           )}
 
           {variety && (

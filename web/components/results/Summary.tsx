@@ -27,7 +27,7 @@ function Row({ icon, label, info, children }: { icon: ReactNode; label: string; 
 }
 
 function FlagNote({ o, unit }: { o: OrchardInfo; unit: string }) {
-  if (!o.flagged_count) {
+  if (!(o.flagged_count ?? 0)) {
     return (
       <p className="mt-2 text-[12px] text-muted">
         Every reading was checked against the Central Valley&apos;s range and what nearby stations measured; none looked wrong.
@@ -37,11 +37,11 @@ function FlagNote({ o, unit }: { o: OrchardInfo; unit: string }) {
   return (
     <div className="mt-2 rounded-[8px] border border-amber-300 bg-amber-50 p-2.5 text-[12px] leading-relaxed text-amber-900" role="status">
       <p className="font-semibold">
-        {o.flagged_count} reading{o.flagged_count > 1 ? "s were" : " was"} set aside because {o.flagged_count > 1 ? "they don't" : "it doesn't"} look right. Those
+        {(o.flagged_count ?? 0)} reading{(o.flagged_count ?? 0) > 1 ? "s were" : " was"} set aside because {(o.flagged_count ?? 0) > 1 ? "they don't" : "it doesn't"} look right. Those
         days were filled from the days around them. Check your thermometer or file:
       </p>
       <ul className="mt-1 list-disc pl-4">
-        {o.flagged.slice(0, 6).map((f) => (
+        {(o.flagged ?? []).slice(0, 6).map((f) => (
           <li key={`${f.when}-${f.field}`}>
             <strong>
               {f.when}: {f.field} {f.value}°{unit}
@@ -50,7 +50,7 @@ function FlagNote({ o, unit }: { o: OrchardInfo; unit: string }) {
           </li>
         ))}
       </ul>
-      {o.flagged_count > 6 && <p className="mt-1">... and {o.flagged_count - 6} more.</p>}
+      {(o.flagged_count ?? 0) > 6 && <p className="mt-1">... and {(o.flagged_count ?? 0) - 6} more.</p>}
     </div>
   );
 }

@@ -2,22 +2,17 @@
 
 import { Play, RefreshCw } from "lucide-react";
 import { centroid, useStore, type RunSpec } from "@/lib/store";
-import { circleSamples, outlineSamples, polygonAreaKm2 } from "@/lib/area";
+import { outlineSamples, polygonAreaKm2 } from "@/lib/area";
 import { Button } from "../ui";
-
-// Larger than any orchard block, and big enough to span different climates: refuse with an explanation.
-export const MAX_BLOCK_KM2 = 100;
+import { MAX_BLOCK_KM2 } from "./StepLocation";
 
 export function buildSpec(s: ReturnType<typeof useStore>["s"]): Omit<RunSpec, "n"> | null {
-  if (!s.pin || !s.crop || !s.variety) return null;
-  if (s.drawMode === "outline" && !s.outlineClosed) return null;
+  if (!s.pin || !s.crop || !s.variety || !s.readings) return null;
+  if (!s.areaSkipped && !(s.drawMode === "outline" && s.outlineClosed)) return null;
   if (s.drawMode === "outline" && polygonAreaKm2(s.outline) > MAX_BLOCK_KM2) return null;
   let samplePts: [number, number][] | null = null;
   let areaLabel: string | null = null;
-  if (s.drawMode === "circle") {
-    samplePts = circleSamples(s.pin.lat, s.pin.lon, s.radiusKm);
-    areaLabel = `${s.radiusKm.toFixed(1)} km circle`;
-  } else if (s.drawMode === "outline" && s.outline.length >= 3) {
+  if (s.drawMode === "outline" && s.outline.length >= 3) {
     samplePts = outlineSamples(s.outline, centroid(s.outline));
     areaLabel = "your outlined block";
   }
@@ -49,14 +44,16 @@ export default function RunBar({ onRun }: { onRun: () => void }) {
   const spec = buildSpec(s);
   const upToDate = same(spec, s.run);
   const missing = !s.pin
-    ? "Choose your orchard's location first."
-    : s.drawMode === "outline" && !s.outlineClosed
-      ? "Finish drawing your block's outline first."
+    ? "Add your orchard first."
+    : !s.areaSkipped && !(s.drawMode === "outline" && s.outlineClosed)
+      ? "Finish outlining your farm first."
       : s.drawMode === "outline" && polygonAreaKm2(s.outline) > MAX_BLOCK_KM2
-        ? `That outline covers about ${Math.round(polygonAreaKm2(s.outline) * 247.1).toLocaleString()} acres, larger than an orchard block and wide enough to span different climates. Zoom in and draw your block, or analyze one spot.`
+        ? "That outline is larger than a farm. Redraw just your orchard."
         : !s.variety
-          ? "Choose what you are growing."
-          : null;
+          ? "Choose your crop and type."
+          : !s.readings
+            ? "Add your daily temperatures."
+            : null;
   return (
     <div className="space-y-1.5">
       <Button

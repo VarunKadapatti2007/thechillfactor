@@ -14,6 +14,7 @@ import RunBar from "./wizard/RunBar";
 import StepCrop from "./wizard/StepCrop";
 import StepLocation from "./wizard/StepLocation";
 import StepReadings from "./wizard/StepReadings";
+import { locationDone } from "./wizard/StepLocation";
 
 const MIN_PROGRESS_MS = 900; // long enough to read, short enough not to stall cached results
 
@@ -45,6 +46,14 @@ export default function PanelBody() {
   const { point } = useData();
   const reduce = useReducedMotion();
   const [editing, setEditing] = useState(true);
+  const [edit, setEdit] = useState<number | null>(null);
+  const doneKey = [locationDone(s), !!s.variety, !!s.readings].join();
+  const prevDone = useRef(doneKey);
+  useEffect(() => {
+    // Finishing the step being changed folds it again.
+    if (edit !== null && prevDone.current.split(",")[edit] === "false" && doneKey.split(",")[edit] === "true") setEdit(null);
+    prevDone.current = doneKey;
+  }, [doneKey, edit]);
   const [minUntil, setMinUntil] = useState(0);
   const [, force] = useState(0);
   const top = useRef<HTMLDivElement>(null);
@@ -61,34 +70,32 @@ export default function PanelBody() {
   }, [minUntil]);
 
   const showInputs = !s.run || editing;
+
+  // Steps open one at a time: each appears once the one before it is done, and a finished step folds
+  // to one line. "Change" reopens a step; finishing it folds it again.
+  const done = [locationDone(s), !!s.variety, !!s.readings];
+  const firstOpen = done.indexOf(false);
+  const active = edit ?? (firstOpen === -1 ? 3 : firstOpen);
   const waiting = !!s.run && (point.loading || Date.now() < minUntil || (!point.data && !point.error));
 
   return (
     <div ref={top} className="space-y-3 p-4">
       {showInputs ? (
         <>
-          {!s.run && (
-            <div>
-              <h2 className="text-[20px] font-semibold leading-tight">Is this winter enough for your trees?</h2>
-              <p className="mt-1 text-[13px] text-muted">Three quick steps: where your orchard is, what you grow, then run the analysis. Add your own thermometer readings if you have them.</p>
+          <StepLocation collapsed={active !== 0 && done[0]} onEdit={() => setEdit(0)} />
+          {done[0] && <StepCrop collapsed={active !== 1 && done[1]} onEdit={() => setEdit(1)} />}
+          {done[0] && done[1] && <StepReadings n={3} collapsed={active !== 2 && done[2]} onEdit={() => setEdit(2)} />}
+          {done[0] && done[1] && done[2] && active === 3 && (
+            <div className="rounded-[12px] border border-line bg-surface p-4">
+              <RunBar
+                onRun={() => {
+                  setEditing(false);
+                  setMinUntil(Date.now() + MIN_PROGRESS_MS);
+                  top.current?.scrollIntoView({ block: "start" });
+                }}
+              />
             </div>
           )}
-          <StepLocation />
-          <StepCrop />
-          <StepReadings n={3} />
-          <div className="rounded-[12px] border border-line bg-surface p-3">
-            <h2 className="mb-2 flex items-center gap-2 text-[16px] font-semibold">
-              <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full bg-bg text-[12px]">4</span>
-              Run the analysis
-            </h2>
-            <RunBar
-              onRun={() => {
-                setEditing(false);
-                setMinUntil(Date.now() + MIN_PROGRESS_MS);
-                top.current?.scrollIntoView({ block: "start" });
-              }}
-            />
-          </div>
         </>
       ) : (
         <InputsSummary onEdit={() => setEditing(true)} />

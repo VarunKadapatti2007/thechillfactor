@@ -8,7 +8,7 @@ export type Tab = "winter" | "history" | "heat" | "accuracy";
 export type GridLayer = "off" | "safe_chill" | "chill_so_far";
 export type SheetSnap = "peek" | "half" | "full";
 
-export type DrawMode = "pin" | "circle" | "outline";
+export type DrawMode = "pin" | "outline";
 
 // Inputs frozen when the grower presses "Run analysis"; results always describe this snapshot.
 export interface RunSpec {
@@ -47,8 +47,8 @@ export interface AppState {
   sheet: SheetSnap;
   flyTo: { lat: number; lon: number; zoom: number; n: number } | null;
   coach: number | null; // onboarding step 0..2, null = hidden
-  drawMode: DrawMode;
-  radiusKm: number;
+  drawMode: DrawMode; // "outline": the next map taps draw the farm boundary
+  areaSkipped: boolean; // the grower chose to use just the pin
   outline: [number, number][]; // [lon, lat]
   outlineClosed: boolean;
   readings: Readings | null;
@@ -57,7 +57,7 @@ export interface AppState {
 
 export type Action =
   | { type: "pin"; pin: Pin | null; fly?: boolean }
-  | { type: "crop"; crop: string; variety: string }
+  | { type: "crop"; crop: string; variety?: string | null }
   | { type: "variety"; variety: string }
   | { type: "units"; units: Units }
   | { type: "start"; start: StartOpt }
@@ -70,10 +70,12 @@ export type Action =
   | { type: "sheet"; sheet: SheetSnap }
   | { type: "coach"; step: number | null }
   | { type: "drawMode"; mode: DrawMode }
-  | { type: "radius"; km: number }
   | { type: "outlineAdd"; lon: number; lat: number }
   | { type: "outlineClose" }
   | { type: "outlineClear" }
+  | { type: "outlineUndo" }
+  | { type: "skipArea" }
+  | { type: "drawArea" }
   | { type: "readings"; readings: Readings | null }
   | { type: "run"; spec: Omit<RunSpec, "n"> }
   | { type: "resetRun" };
@@ -94,7 +96,7 @@ const initial: AppState = {
   flyTo: null,
   coach: null,
   drawMode: "pin",
-  radiusKm: 1,
+  areaSkipped: false,
   outline: [],
   outlineClosed: false,
   readings: null,
@@ -104,16 +106,20 @@ const initial: AppState = {
 function reducer(s: AppState, a: Action): AppState {
   switch (a.type) {
     case "pin":
+      // A new pin starts the farm outline around it (unless the grower chose to use just the pin).
       return {
         ...s,
         pin: a.pin,
+        drawMode: a.pin && !s.areaSkipped ? "outline" : "pin",
+        outline: [],
+        outlineClosed: false,
         replaySeason: null,
         sheet: a.pin ? (s.sheet === "peek" ? "half" : s.sheet) : "peek",
-        flyTo: a.pin && a.fly ? { lat: a.pin.lat, lon: a.pin.lon, zoom: 10, n: (s.flyTo?.n ?? 0) + 1 } : s.flyTo,
+        flyTo: a.pin && a.fly ? { lat: a.pin.lat, lon: a.pin.lon, zoom: 15, n: (s.flyTo?.n ?? 0) + 1 } : s.flyTo,
         coach: a.pin && s.coach === 0 ? 1 : s.coach,
       };
     case "crop":
-      return { ...s, crop: a.crop, variety: a.variety, byOverride: null, coach: s.coach === 1 ? 2 : s.coach };
+      return { ...s, crop: a.crop, variety: a.variety ?? null, byOverride: null, coach: s.coach === 1 ? 2 : s.coach };
     case "variety":
       return { ...s, variety: a.variety, byOverride: null };
     case "units":
@@ -138,8 +144,6 @@ function reducer(s: AppState, a: Action): AppState {
       return { ...s, coach: a.step };
     case "drawMode":
       return { ...s, drawMode: a.mode, outline: [], outlineClosed: false };
-    case "radius":
-      return { ...s, radiusKm: a.km };
     case "outlineAdd": {
       if (s.outlineClosed) return s;
       const outline = [...s.outline, [a.lon, a.lat] as [number, number]];
@@ -148,10 +152,16 @@ function reducer(s: AppState, a: Action): AppState {
     case "outlineClose": {
       if (s.outline.length < 3) return s;
       const c = centroid(s.outline);
-      return { ...s, outlineClosed: true, pin: { lat: c[1], lon: c[0], label: "Your outlined block" } };
+      return { ...s, outlineClosed: true, pin: { lat: c[1], lon: c[0], label: s.pin?.label ?? "My orchard" } };
     }
     case "outlineClear":
       return { ...s, outline: [], outlineClosed: false };
+    case "outlineUndo":
+      return s.outlineClosed ? s : { ...s, outline: s.outline.slice(0, -1) };
+    case "skipArea":
+      return { ...s, drawMode: "pin", areaSkipped: true, outline: [], outlineClosed: false };
+    case "drawArea":
+      return { ...s, drawMode: "outline", areaSkipped: false, outline: [], outlineClosed: false };
     case "readings":
       return { ...s, readings: a.readings };
     case "run":
