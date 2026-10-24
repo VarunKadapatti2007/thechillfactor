@@ -172,6 +172,13 @@ Question from the user: are we really closing Julia's gap? Full write-up in RESE
 - Live refresh every 3 hours (this month re-pulled once per 3-hour block, one request per station). If CIMIS refuses, the rest of the cycle uses FNRIC `stemwater`, which relays the same CIMIS hours: on 300 Davis hours, shifted from hour-beginning to hour-ending labels, 96% identical and the rest within 0.1 °F, with the same QC flags. Container clock set to Pacific time. `/api/health` reports sources, latest hour and age.
 - METHODS.md: every formula, plus why daily lows and highs cut the error (sensitivity: 1 °C on every hour = about 10 CP by Mar 1; readings remove the +2.29 CP orchard bias and cut scatter from 3.57 to 2.28 CP).
 
+## Grower readings made easy (2026-10-24 12:30)
+
+- Step 3 takes a file in any layout (Excel, CSV, text, Word, PDF) and shows the reading live: the file opened, the columns found, the days and range, then the first rows as read, before the grower confirms. `POST /api/readings/parse`: built-in rules for clear headers; otherwise Claude Haiku (`claude-haiku-5-5`, low effort, JSON schema output) names the columns from a preview, and code applies that layout to every row. Results are cached by file content.
+- `/log`: a simple daily log (big low/high inputs, history, import from a file, CSV download), saved in the browser; "Check my chill with this log" opens the app with it loaded.
+- The built-in sample was removed. `demo_files/` holds real Terra Bella Wildeye readings in four formats for live demos; file 4 (odd headers) needs the AI reader, which identified 'When', 'Coldest overnight' and 'Warmest afternoon' correctly.
+- Desktop layout: the side panel now takes 60% of the width with larger text; the map takes 40%. The Accuracy section opens with plain bullets and three headline numbers (full results behind a toggle). The season chart has a plain "How to read this chart" key.
+
 ## Known traps checklist (BUILD.md section 9)
 
 - [x] FNRIC `chill-year` in two-year form (asserted in `fnric.chill_models`); arrays sorted; daily values cumulated

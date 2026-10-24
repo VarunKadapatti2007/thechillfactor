@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useStore, type Tab } from "./store";
+import { loadLog, logReadings } from "./orchardLog";
 
 const TABS: Tab[] = ["winter", "history", "heat", "accuracy"];
 
@@ -24,6 +25,11 @@ export function useUrlState() {
     // A shared link with a place and a crop runs the analysis straight away.
     if (q.get("lat") && q.get("lon") && Number.isFinite(lat) && Number.isFinite(lon) && crop && variety) {
       d({ type: "run", spec: { lat, lon, label: q.get("label") ?? undefined, crop, variety, by: null, start: "sep1", climate: null, samplePts: null, areaLabel: null, readings: null } });
+    }
+    // Coming back from the orchard log page: use the log as the readings.
+    if (q.get("log") === "1") {
+      const r = logReadings(loadLog());
+      if (r) d({ type: "readings", readings: r });
     }
     const tab = q.get("tab") as Tab | null;
     if (tab && TABS.includes(tab)) d({ type: "tab", tab });

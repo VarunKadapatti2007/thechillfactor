@@ -13,3 +13,8 @@ pymannkendall
 lightgbm
 httpx
 tqdm
+anthropic
+openpyxl
+xlrd
+python-docx
+pypdf

@@ -26,8 +26,10 @@ function Shell() {
           <MapView />
         </main>
         {desktop ? (
-          <aside aria-label="Results" className="relative z-20 w-[440px] shrink-0 overflow-y-auto border-l border-line bg-surface shadow-[-4px_0_18px_rgba(31,42,36,0.08)]">
-            <PanelBody />
+          <aside aria-label="Results" className="panel-lg relative z-20 w-[60%] min-w-[540px] max-w-[980px] shrink-0 overflow-y-auto border-l border-line bg-surface shadow-[-4px_0_18px_rgba(31,42,36,0.08)]">
+            <div className="mx-auto max-w-[860px] px-2">
+              <PanelBody />
+            </div>
           </aside>
         ) : (
           <div className="pointer-events-none absolute inset-0">

@@ -18,3 +18,10 @@ httpx
 lightgbm
 scikit-learn
 pillow
+
+# grower file reader (products/readings_parse.py)
+anthropic
+openpyxl
+xlrd
+python-docx
+pypdf

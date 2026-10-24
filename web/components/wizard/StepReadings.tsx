@@ -1,97 +1,166 @@
 "use client";
 
-import { ChevronDown, FileUp, Thermometer, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { Check, FileUp, Loader2, NotebookPen, Sparkles, Thermometer, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useData } from "@/lib/data";
 import { longDate } from "@/lib/format";
-import { parseReadings, withUnit } from "@/lib/readings";
+import { fileReadings, loadLog, logReadings, parseFile, type ParsedFile } from "@/lib/orchardLog";
+import { withUnit } from "@/lib/readings";
 import { useStore } from "@/lib/store";
 import { Button, cn } from "../ui";
 import StepCard from "./StepCard";
 
-// A real in-orchard record: Wildeye "CA Pistachio # 5 - Terra Bella" via the FNRIC API, winter 2025-26.
-const SAMPLE = {
-  file: "/samples/terra-bella-pistachio-2025-26.csv",
-  name: "Pistachio orchard sensor, Terra Bella (sample)",
-  lat: 35.9599,
-  lon: -119.0664,
-};
+const STEP_MS = 450; // the server's steps are shown one by one so a watcher can follow them
+
+type Phase = { kind: "idle" } | { kind: "reading"; file: File; shown: string[] } | { kind: "read"; file: File; parsed: ParsedFile; shown: number } | { kind: "error"; message: string };
+
+function fmtBytes(n: number) {
+  return n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function Steps({ lines, busy }: { lines: string[]; busy: string | null }) {
+  return (
+    <ol className="space-y-1.5 text-[13px]" aria-live="polite">
+      {lines.map((l, i) => (
+        <li key={i} className="flex gap-2">
+          <Check size={15} aria-hidden className="mt-0.5 shrink-0 text-brand" />
+          <span>{l}</span>
+        </li>
+      ))}
+      {busy && (
+        <li className="flex gap-2 text-muted">
+          <Loader2 size={15} aria-hidden className="mt-0.5 shrink-0 animate-spin" />
+          <span>{busy}</span>
+        </li>
+      )}
+    </ol>
+  );
+}
+
+function Preview({ p }: { p: ParsedFile }) {
+  const daily = p.kind === "daily";
+  return (
+    <table className="num mt-2 w-full text-left text-[12px]">
+      <thead>
+        <tr className="text-muted">
+          <th className="py-1 font-medium">{daily ? "Date" : "Date and time"}</th>
+          {daily ? (
+            <>
+              <th className="py-1 text-right font-medium">Low °{p.unit}</th>
+              <th className="py-1 text-right font-medium">High °{p.unit}</th>
+            </>
+          ) : (
+            <th className="py-1 text-right font-medium">Temp °{p.unit}</th>
+          )}
+        </tr>
+      </thead>
+      <tbody>
+        {p.preview.map((r) => (
+          <tr key={r.when} className="border-t border-line">
+            <td className="py-1">{r.when}</td>
+            {daily ? (
+              <>
+                <td className="py-1 text-right">{r.low}</td>
+                <td className="py-1 text-right">{r.high}</td>
+              </>
+            ) : (
+              <td className="py-1 text-right">{r.temp}</td>
+            )}
+          </tr>
+        ))}
+        <tr className="border-t border-line text-muted">
+          <td className="py-1" colSpan={3}>
+            ... and {Math.max(0, p.rows - p.preview.length).toLocaleString()} more
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
 
 export default function StepReadings({ n }: { n: number }) {
   const { s, d } = useStore();
   const { validation } = useData();
-  const [err, setErr] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [drag, setDrag] = useState(false);
+  const [logDays, setLogDays] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const rd = s.readings;
+
+  useEffect(() => {
+    setLogDays(Object.keys(loadLog().entries).length);
+  }, []);
+
+  // Reveal the server's steps one at a time.
+  useEffect(() => {
+    if (phase.kind !== "read" || phase.shown >= phase.parsed.steps.length) return;
+    const t = setTimeout(() => setPhase({ ...phase, shown: phase.shown + 1 }), STEP_MS);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   const test = validation.data?.orchard_readings?.tests?.wildeye_orchard;
   const before = test?.scenarios?.station_only?.mae_cp;
   const after = test?.scenarios?.readings_from_sep1?.mae_cp;
-  const late = test?.scenarios?.readings_from_jan1?.mae_cp;
-
-  async function load(text: string, source: string) {
-    const r = parseReadings(text, source);
-    if ("error" in r) {
-      setErr(r.error);
-      return null;
-    }
-    setErr(null);
-    d({ type: "readings", readings: r });
-    return r;
-  }
 
   async function onFile(f: File | undefined) {
     if (!f) return;
     if (f.size > 8_000_000) {
-      setErr("That file is too large. Export daily lows and highs, or hourly logger data.");
+      setPhase({ kind: "error", message: "That file is over 8 MB. Export daily lows and highs, or hourly logger data." });
       return;
     }
-    await load(await f.text(), f.name);
-  }
-
-  async function sample() {
+    setPhase({ kind: "reading", file: f, shown: [`Uploaded ${f.name} (${fmtBytes(f.size)}).`] });
     try {
-      const text = await (await fetch(SAMPLE.file)).text();
-      const r = await load(text, "sample");
-      if (r) {
-        d({ type: "pin", pin: { lat: SAMPLE.lat, lon: SAMPLE.lon, label: SAMPLE.name }, fly: true });
-        d({ type: "crop", crop: "pistachio", variety: "kerman" });
-      }
-    } catch {
-      setErr("Couldn't load the example.");
+      const parsed = await parseFile(f);
+      setPhase({ kind: "read", file: f, parsed, shown: 0 });
+    } catch (e) {
+      setPhase({ kind: "error", message: e instanceof Error ? e.message : "Couldn't read that file." });
     }
   }
+
+  function applyLog() {
+    const r = logReadings(loadLog());
+    if (r) d({ type: "readings", readings: r });
+  }
+
+  const reading = phase.kind === "reading";
+  const read = phase.kind === "read" ? phase : null;
+  const allShown = read ? read.shown >= read.parsed.steps.length : false;
 
   return (
     <StepCard n={n} title="Your orchard's own readings (optional)" done={!!rd}>
       <p className="text-[13px] leading-relaxed">
-        Have a min/max thermometer or a temperature logger in the orchard? Add its readings and chill is counted from your orchard&apos;s own
-        temperatures.
+        A weather station miles away can&apos;t see your orchard&apos;s cold pockets or warm afternoons. If you keep a min/max thermometer or a
+        temperature logger in the orchard, add its readings and chill is counted from your own temperatures.
         {before !== undefined && after !== undefined && (
           <>
             {" "}
-            At {test!.n_sites} pistachio orchards, this cut the typical miss from <span className="num font-semibold">{before.toFixed(1)}</span> to{" "}
-            <span className="num font-semibold">{after.toFixed(1)}</span> chill portions
-            {late !== undefined && <> (readings starting Jan 1 still brought it to {late.toFixed(1)})</>}.
+            In our tests at {test!.n_sites} real orchards, this cut the typical miss from <span className="num font-semibold">{before.toFixed(1)}</span> to{" "}
+            <span className="num font-semibold">{after.toFixed(1)}</span> chill portions.
           </>
         )}
       </p>
 
       {rd ? (
-        <div className="mt-3 rounded-[10px] border border-line bg-bg p-2.5 text-[13px]" role="status">
+        <div className="mt-3 rounded-[10px] border border-line bg-bg p-3 text-[13px]" role="status">
           <div className="flex items-start gap-2">
-            <Thermometer size={16} aria-hidden className="mt-0.5 shrink-0 text-chill" />
+            <Thermometer size={18} aria-hidden className="mt-0.5 shrink-0 text-chill" />
             <div className="min-w-0 flex-1">
               <div className="font-medium">
-                {rd.kind === "daily" ? `${rd.rows} days of lows and highs` : `${rd.rows.toLocaleString()} logger readings`}
+                Using {rd.kind === "daily" ? `${rd.rows} days of lows and highs` : `${rd.rows.toLocaleString()} logger readings`}
               </div>
               <div className="text-muted">
-                {longDate(rd.first)} to {longDate(rd.last)} · {rd.source === "sample" ? SAMPLE.name : rd.source}
+                {longDate(rd.first)} to {longDate(rd.last)} · {rd.source}
               </div>
             </div>
-            <button aria-label="Remove readings" className="rounded p-1 text-muted hover:bg-surface" onClick={() => d({ type: "readings", readings: null })}>
-              <X size={15} />
+            <button
+              aria-label="Stop using these readings"
+              className="rounded p-1 text-muted hover:bg-surface"
+              onClick={() => {
+                d({ type: "readings", readings: null });
+                setPhase({ kind: "idle" });
+              }}
+            >
+              <X size={16} />
             </button>
           </div>
           <div className="mt-2 flex items-center gap-2">
@@ -109,21 +178,76 @@ export default function StepReadings({ n }: { n: number }) {
                 </button>
               ))}
             </div>
-            <span className="text-[11px] text-muted">(we guessed; fix it if wrong)</span>
           </div>
         </div>
+      ) : read || reading ? (
+        <div className="mt-3 rounded-[10px] border border-line bg-bg p-3">
+          <Steps
+            lines={phase.kind === "reading" ? phase.shown : [`Uploaded ${read!.file.name} (${fmtBytes(read!.file.size)}).`, ...read!.parsed.steps.slice(0, read!.shown)]}
+            busy={reading ? "Reading the file..." : allShown ? null : "Checking..."}
+          />
+          {read && allShown && (
+            <>
+              {read.parsed.method === "ai" && (
+                <p className="mt-2 flex gap-1.5 text-[12px] text-muted">
+                  <Sparkles size={14} aria-hidden className="mt-0.5 shrink-0" />
+                  AI file reader: {read.parsed.explanation} Every number below comes straight from your file.
+                </p>
+              )}
+              <Preview p={read.parsed} />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="primary" className="h-10 text-[14px]" onClick={() => d({ type: "readings", readings: fileReadings(read.parsed, read.file.name) })}>
+                  <Check size={16} aria-hidden /> Use these readings
+                </Button>
+                <Button className="h-10 text-[14px]" onClick={() => setPhase({ kind: "idle" })}>
+                  Choose a different file
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       ) : (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button className="h-9 text-[13px]" onClick={() => fileRef.current?.click()}>
-            <FileUp size={15} aria-hidden /> Add a file (CSV)
-          </Button>
-          <Button className="h-9 text-[13px]" onClick={sample}>
-            Try a real example
-          </Button>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <button
+            onClick={() => fileRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDrag(true);
+            }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDrag(false);
+              onFile(e.dataTransfer.files?.[0]);
+            }}
+            className={cn(
+              "flex min-h-[112px] flex-col items-center justify-center gap-1.5 rounded-[12px] border-2 border-dashed p-4 text-center",
+              drag ? "border-brand bg-brand/5" : "border-line hover:border-brand hover:bg-bg",
+            )}
+          >
+            <FileUp size={24} aria-hidden className="text-brand" />
+            <span className="text-[15px] font-semibold">Upload a file</span>
+            <span className="text-[12px] text-muted">Drop it here or click. Excel, CSV, text, Word or PDF, any layout.</span>
+          </button>
+          <a
+            href="/log"
+            className="flex min-h-[112px] flex-col items-center justify-center gap-1.5 rounded-[12px] border border-line p-4 text-center hover:border-brand hover:bg-bg"
+          >
+            <NotebookPen size={24} aria-hidden className="text-brand" />
+            <span className="text-[15px] font-semibold">Type them in</span>
+            <span className="text-[12px] text-muted">
+              {logDays ? `Your orchard log has ${logDays} day${logDays === 1 ? "" : "s"}. Open it to add today.` : "Keep a simple daily log of each day's low and high."}
+            </span>
+          </a>
+          {logDays >= 3 && (
+            <Button className="h-10 text-[14px] sm:col-span-2" onClick={applyLog}>
+              <NotebookPen size={16} aria-hidden /> Use my orchard log ({logDays} days)
+            </Button>
+          )}
           <input
             ref={fileRef}
             type="file"
-            accept=".csv,.txt,text/csv,text/plain"
+            accept=".csv,.txt,.tsv,.dat,.log,.xlsx,.xlsm,.xls,.docx,.pdf"
             className="sr-only"
             aria-label="Thermometer or logger file"
             onChange={(e) => {
@@ -133,28 +257,18 @@ export default function StepReadings({ n }: { n: number }) {
           />
         </div>
       )}
-      {err && (
-        <p className="mt-2 text-[12px] text-red-700" role="alert">
-          {err}
-        </p>
-      )}
 
-      <button className="mt-2 flex items-center gap-1 text-[12px] text-muted underline-offset-2 hover:underline" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        What file works?
-        <ChevronDown size={13} aria-hidden className={cn("transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-muted">
-          <li>A min/max thermometer: one row per day with the date, the low and the high (columns: date, low, high).</li>
-          <li>A temperature logger export: date and time, temperature, at any interval. We average to hours.</li>
-          <li>°F or °C both work. Missing days are fine: gaps of up to 4 days are filled in, longer gaps and days before your readings start use the station estimate.</li>
-          <li>
-            Put the thermometer in shade about 5 ft up, with air moving past it (a radiation shield or a shaded box with vents). In the sun it reads too warm and
-            undercounts chill.
-          </li>
-          <li>Your file is used only to compute this answer. We don&apos;t keep a copy of it.</li>
-        </ul>
+      {phase.kind === "error" && (
+        <div className="mt-2 flex items-start justify-between gap-2 rounded-[8px] bg-red-50 p-2.5 text-[12px] text-red-800" role="alert">
+          <span>{phase.message}</span>
+          <button className="shrink-0 underline" onClick={() => setPhase({ kind: "idle" })}>
+            Try again
+          </button>
+        </div>
       )}
+      <p className="mt-2 text-[12px] leading-relaxed text-muted">
+        Keep the thermometer in shade about 5 ft up with air moving past it, like a weather station. In the sun it reads too warm and undercounts chill.
+      </p>
     </StepCard>
   );
 }

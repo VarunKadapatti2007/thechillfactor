@@ -166,6 +166,11 @@ class OrchardResponse(PointResponse):
     orchard: OrchardInfo
 
 
+class ReadingsFile(_Model):
+    filename: str
+    content_b64: str
+
+
 class OrchardRequest(_Model):
     lat: float
     lon: float

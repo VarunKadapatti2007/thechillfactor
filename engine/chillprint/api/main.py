@@ -25,6 +25,7 @@ from ..pipeline.pins import get_pin as build_pin
 from ..products.heat import heat as heat_product
 from ..products.history import history as history_product
 from ..products.orchard import orchard_point
+from ..products.readings_parse import ai_available, parse_file
 from ..products.point import BadRequest, point as point_product
 from ..products.replay import replay as replay_product
 from . import schemas as S
@@ -109,7 +110,7 @@ def _mmdd(v: str | None) -> str | None:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "hourly_stations": len(SH.hourly_index()), "tag": _version_tag(),
+    return {"ai_file_reader": ai_available(), "ok": True, "hourly_stations": len(SH.hourly_index()), "tag": _version_tag(),
             "live_refresh": {k: v for k, v in live_refresh.STATE.items() if k != "stamp"}}
 
 
@@ -242,6 +243,27 @@ def orchard(req: S.OrchardRequest):
     _variety(req.crop, req.variety)
     params = {**req.model_dump(), "lat": round(req.lat, 4), "lon": round(req.lon, 4), "by": _mmdd(req.by)}
     return _cached("orchard", params, lambda: orchard_point(**params), S.OrchardResponse)
+
+
+@app.post("/api/readings/parse")
+def readings_parse(req: S.ReadingsFile):
+    """Read a thermometer or logger file in any common format (Excel, CSV, text, Word, PDF).
+    Cached by file content, so the same file is read once."""
+    import base64
+    try:
+        data = base64.b64decode(req.content_b64, validate=True)
+    except Exception:
+        raise HTTPException(400, "content_b64 must be base64")
+    key = hashlib.sha1(data + req.filename.lower().encode()).hexdigest()[:24]
+    p = CACHE / f"parse_{key}.json"
+    if p.exists():
+        return JSONResponse(json.loads(p.read_text(encoding="utf-8")))
+    try:
+        out = _clean(parse_file(req.filename, data))
+    except BadRequest as e:
+        raise HTTPException(400, str(e))
+    p.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
+    return JSONResponse(out)
 
 
 @app.get("/api/heat")

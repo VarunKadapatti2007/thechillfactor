@@ -10,7 +10,9 @@ ChillPrint estimates winter chill for California fruit and nut growers at the ex
 - the past winter this one most resembles,
 - a time machine that replays any past winter day by day,
 - a land history card: every winter since 1980-81 at that parcel, with the trend and safe winter chill,
-- and, if the grower has a min/max thermometer or a logger in the orchard, chill counted from its own readings (typical miss 1.8 CP at 18 real orchards, against 3.5 CP from stations alone).
+- and, if the grower has a min/max thermometer or a logger in the orchard, chill counted from its own readings (typical miss 1.8 CP at 18 real orchards, against 3.5 CP from stations alone). Growers can upload a file in any layout (Excel, CSV, text, Word, PDF; an AI reader, Claude Haiku, names the columns when the layout is unusual, and code reads every value), or keep a daily log at `/log` that is saved on their device.
+
+**Demo files:** `demo_files/` holds real readings from an in-orchard sensor near Terra Bella (Wildeye via FNRIC) in four formats, from a simple daily log to a hand-kept sheet with odd headers. Upload one in step 3 and watch each step as it reads.
 
 Built for the UC Davis Reboot the Earth hackathon (FNRIC "Counting the Cold" challenge), October 2026.
 

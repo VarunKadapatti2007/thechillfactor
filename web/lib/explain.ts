@@ -23,7 +23,7 @@ export const EXPLAIN = {
   heat:
     "After bloom, warmth drives nut and fruit development. Growing degree days add up that warmth from your bloom date.",
   accuracy:
-    "We hid real weather stations one at a time, estimated them from everything else, and compared with what they actually measured.",
+    "How we tested these numbers against real measurements, in plain terms.",
   block:
     "For a whole block we check several spots across it (at least 1 km apart, the size of our climate map's grid) and tell you if chill differs across the block.",
 };

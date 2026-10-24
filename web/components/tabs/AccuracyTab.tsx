@@ -101,7 +101,82 @@ export default function AccuracyTab() {
       </div>
     );
   }
-  return <Accuracy v={validation.data} />;
+  return <SimpleAccuracy v={validation.data} />;
+}
+
+function Headline({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-[10px] bg-bg p-3">
+      <div className="num text-[22px] font-semibold leading-none text-ink">{value}</div>
+      <div className="mt-1 text-[12px] leading-snug text-muted">{label}</div>
+    </div>
+  );
+}
+
+// The default view: how we tested, in plain words, with three headline numbers. Details on request.
+function SimpleAccuracy({ v }: { v: ValidationResponse }) {
+  const [more, setMore] = useState(false);
+  const est = Object.fromEntries(v.estimators.map((e) => [e.id, e]));
+  const ours = est[v.default_ids?.history ?? "E4"]?.mae_cp;
+  const nearest = est["E0"]?.mae_cp;
+  const we = v.orchard_readings?.tests?.wildeye_orchard;
+  const hs = v.orchard_readings?.tests?.hidden_station;
+  const withReadings = we?.scenarios?.readings_from_sep1?.mae_cp;
+  const atOrchards = we?.scenarios?.station_only?.mae_cp;
+  const bt = v.backtest;
+  const f = (x: number | null | undefined) => (x === null || x === undefined ? "Not available" : x.toFixed(1));
+  return (
+    <div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Headline value={`${f(ours)} CP`} label="typical miss from weather stations alone (any spot, no readings)" />
+        <Headline value={`${f(withReadings)} CP`} label="typical miss when the orchard's own daily highs and lows are added" />
+        <Headline value={`${v.n_station_seasons.toLocaleString()}`} label="real winters used to test it" />
+      </div>
+      <p className="mt-3 text-[14px] font-semibold">How we tested it, in plain terms</p>
+      <ul className="mt-1.5 list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed">
+        <li>
+          <strong>We hid real weather stations, one at a time.</strong> For each hidden station we estimated its chill from all the others, exactly the way the
+          app estimates your orchard, then compared with what the station really measured. {v.n_stations} stations, {v.n_station_seasons} winters.
+        </li>
+        <li>
+          <strong>Our method beat simply using the nearest station:</strong> a typical miss of {f(ours)} chill portions against {f(nearest)}.
+        </li>
+        {we && (
+          <li>
+            <strong>We repeated the test inside {we.n_sites} real orchards</strong> that have their own temperature sensors (not part of the public network).
+            Stations alone missed by {f(atOrchards)}; adding the orchard&apos;s own daily highs and lows brought it to {f(withReadings)}
+            {hs ? ` (${f(hs.scenarios.readings_from_sep1?.mae_cp)} at the hidden stations)` : ""}.
+          </li>
+        )}
+        {bt.brier !== null && bt.brier_climatology !== null && (
+          <li>
+            <strong>We checked the odds against what really happened.</strong> Replaying every past winter, our chances were more accurate than simply counting
+            how often past winters made it.
+          </li>
+        )}
+        {v.diet_rule && (
+          <li>
+            <strong>We tested missing days</strong> by deleting days from real records: {v.diet_rule.charAt(0).toLowerCase() + v.diet_rule.slice(1)}
+          </li>
+        )}
+        <li>
+          <strong>The chill math itself matches UC&apos;s calculator.</strong> On the same weather data we get the same chill portions as the UC Fruit &amp; Nut
+          Research and Information Center, to three decimal places.
+        </li>
+        <li>
+          <strong>Every &quot;give or take&quot; in the app comes from these tests:</strong> 8 in 10 test cases landed within it.
+        </li>
+      </ul>
+      <button className="mt-3 flex items-center gap-1 text-[13px] font-medium text-brand hover:underline" onClick={() => setMore((m) => !m)} aria-expanded={more}>
+        {more ? "Hide the full test results" : "See the full test results"}
+      </button>
+      {more && (
+        <div className="mt-3 border-t border-line pt-3">
+          <Accuracy v={v} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Accuracy({ v }: { v: ValidationResponse }) {

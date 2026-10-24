@@ -4,7 +4,7 @@ import { ChevronDown, History, LineChart, Play, ShieldCheck, Sun } from "lucide-
 import { useMemo, useState, type ReactNode } from "react";
 import { useData } from "@/lib/data";
 import { EXPLAIN } from "@/lib/explain";
-import { seasonShort } from "@/lib/format";
+import { seasonShort, shortDate } from "@/lib/format";
 import { useStore, type Tab } from "@/lib/store";
 import type { PointResponse } from "@/lib/types";
 import SeasonChart from "../charts/SeasonChart";
@@ -44,6 +44,57 @@ function Block({ id, icon, title, why, open = false, children }: { id: Tab; icon
   );
 }
 
+function KeyItem({ swatch, children }: { swatch: ReactNode; children: ReactNode }) {
+  return (
+    <li className="flex items-start gap-2.5">
+      <span aria-hidden className="mt-1 flex h-3 w-7 shrink-0 items-center justify-center">
+        {swatch}
+      </span>
+      <span>{children}</span>
+    </li>
+  );
+}
+
+// Plain-language key for the season chart: what each line and band means, then the takeaway.
+function ChartKey({ p }: { p: PointResponse }) {
+  const { low, high } = p.need;
+  const by = shortDate(p.need.by);
+  const need = low === high ? `${low}` : `${low} to ${high}`;
+  const finished = p.asof >= p.need.by;
+  const where = p.outlook.p50 >= high ? "above" : p.outlook.p50 >= low ? "inside" : "below";
+  return (
+    <div className="mt-3 rounded-[10px] bg-bg p-3 text-[13px] leading-relaxed">
+      <p className="font-semibold">How to read this chart</p>
+      <p className="mt-1 text-muted">
+        Chill only adds up through the winter, so every line climbs from left (September) to right (March). Higher means more chill.
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        <KeyItem swatch={<span className="h-[3px] w-full rounded bg-[#3b7ea1]" />}>
+          <strong>Blue line:</strong> this winter&apos;s chill so far ({p.chill.to_date.toFixed(0)} chill portions as of {shortDate(p.asof)}).
+        </KeyItem>
+        {!finished && (
+          <KeyItem swatch={<span className="h-3 w-full rounded-sm bg-[#3b7ea1]/20" />}>
+            <strong>Shaded area and dashed line:</strong> where this winter is heading. The dashed line is the most likely path; 8 in 10 times it ends inside the
+            shading.
+          </KeyItem>
+        )}
+        <KeyItem swatch={<span className="h-[2px] w-full rounded bg-[#c4c9c3]" />}>
+          <strong>Grey lines:</strong> past winters at this same spot, one line per winter, for comparison.
+        </KeyItem>
+        <KeyItem swatch={<span className="h-3 w-full rounded-sm bg-[#3b7ea1]/10 ring-1 ring-[#3b7ea1]/30" />}>
+          <strong>Light band across the chart:</strong> what your trees need, {need} chill portions by {by}.
+        </KeyItem>
+      </ul>
+      <p className="mt-2">
+        <strong>The takeaway:</strong>{" "}
+        {finished
+          ? `this winter reached ${p.outlook.p50.toFixed(0)} chill portions by ${by}, ${where} the need.`
+          : `if the blue line ends inside or above the band by ${by}, the trees get enough chill. Right now the most likely finish is about ${p.outlook.p50.toFixed(0)}, ${where} the band.`}
+      </p>
+    </div>
+  );
+}
+
 function ThisWinter({ p }: { p: PointResponse }) {
   const { s, d } = useStore();
   const seasons = useMemo(() => p.past_seasons.map((x) => x.season).sort().reverse(), [p.past_seasons]);
@@ -59,9 +110,7 @@ function ThisWinter({ p }: { p: PointResponse }) {
         highlight={s.highlight}
         startDos={p.start === "nov1" ? 61 : 0}
       />
-      <p className="mt-2 text-[12px] text-muted">
-        Grey lines are past winters at your spot, the blue line is this winter, and the shaded band is where this winter will most likely end up.
-      </p>
+      <ChartKey p={p} />
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label htmlFor="year-pick" className="text-[12px] text-muted">
           Highlight a winter you remember
@@ -118,7 +167,7 @@ export default function Sections({ p }: { p: PointResponse }) {
   const { point } = useData();
   return (
     <div className="space-y-2">
-      <Block id="winter" icon={<LineChart size={18} />} title="This winter compared with past winters" why="See where this winter stands against every past winter at your spot." open>
+      <Block id="winter" icon={<LineChart size={18} />} title="How this winter's chill is building up" why="This winter's chill so far, where it is heading, and every past winter at your spot for comparison." open>
         <ThisWinter p={p} />
       </Block>
       <Block id="history" icon={<History size={18} />} title="Every winter here since 1980" why={EXPLAIN.history}>

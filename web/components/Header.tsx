@@ -1,5 +1,6 @@
 "use client";
 
+import { NotebookPen } from "lucide-react";
 import { useStore } from "@/lib/store";
 import HowItWorks from "./HowItWorks";
 import { cn } from "./ui";
@@ -13,6 +14,11 @@ export default function Header() {
         <p className="mt-0.5 hidden text-[12px] leading-none text-muted md:block">Chill for your orchard, not the nearest station</p>
       </div>
       <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
+        <a href="/log" className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[13px] font-medium text-ink hover:bg-bg">
+          <NotebookPen size={15} aria-hidden className="text-brand" />
+          <span className="hidden sm:inline">My orchard log</span>
+          <span className="sm:hidden">Log</span>
+        </a>
         <div role="group" aria-label="Temperature units" className="flex shrink-0 rounded-[8px] border border-line p-0.5">
           {(["F", "C"] as const).map((u) => (
             <button

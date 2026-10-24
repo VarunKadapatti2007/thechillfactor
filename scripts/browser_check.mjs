@@ -2,7 +2,7 @@
 //
 // Usage: node scripts/browser_check.mjs <url> <out.png> [--w 1440] [--h 900] [--wait 8000]
 //        [--steps steps.json] [--offline]
-// steps.json: [{"click": "css selector"} | {"eval": "js"} | {"wait": ms} | {"shot": "file.png"}]
+// steps.json: [{"click": "css selector"} | {"eval": "js"} | {"wait": ms} | {"shot": "file.png"} | {"upload": {"selector", "file"}}]
 // Prints console errors, page exceptions, failed requests, and eval results.
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
@@ -106,6 +106,13 @@ if (stepsFile) {
         await send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 });
       }
       await sleep(250);
+    }
+    if (s.upload) {
+      // {"upload": {"selector": "input[type=file]", "file": "C:/path/to/file.csv"}}
+      const doc = await send("DOM.getDocument", { depth: -1 });
+      const q = await send("DOM.querySelector", { nodeId: doc.result.root.nodeId, selector: s.upload.selector });
+      const r = await send("DOM.setFileInputFiles", { nodeId: q.result.nodeId, files: [s.upload.file] });
+      console.log("upload", s.upload.file, "->", r.error ? r.error.message : "ok");
     }
     if (s.eval) console.log("eval ->", JSON.stringify(await evaluate(s.eval)).slice(0, 2000));
     if (s.wait) await sleep(s.wait);

@@ -133,6 +133,8 @@ Daymet's daily low and high are turned into hours with a machine-learned daily c
 - **Logger readings** → hour-ending averages, with the logger clock converted to Pacific Standard Time.
 - **Gaps:** up to 4 days (or 6 logger hours) are filled from the days around them. Longer gaps, and days before the readings start, use E4.
 - **One run:** the Dynamic Model runs once over the merged winter, so its state carries across.
+- **Any file layout** [`engine/chillprint/products/readings_parse.py`]: Excel, CSV and text exports, Word tables and PDF text become one table. Built-in rules find the date, low and high (or temperature) columns from their headers. When the layout is unusual, an AI reader (Claude Haiku) sees a preview and names the columns. Code then reads every value from the file, so the AI never supplies a number. Before use, the grower sees the first rows exactly as read.
+- **The orchard log** (`/log`): one low and one high per day, typed in or imported from a file, saved on the grower's device and sent only when they check their chill.
 
 [`engine/chillprint/products/orchard.py`]
 

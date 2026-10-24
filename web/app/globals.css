@@ -109,3 +109,14 @@ h3 {
   animation: shimmer 1.2s linear infinite;
   border-radius: 8px;
 }
+
+/* The desktop side panel is the main workspace: a step up in type size so it is easy to read and use.
+   Unlayered, so it wins over the utility classes it adjusts. */
+.panel-lg .text-\[11px\] { font-size: 12.5px; }
+.panel-lg .text-\[12px\] { font-size: 13.5px; }
+.panel-lg .text-\[13px\] { font-size: 14.5px; }
+.panel-lg .text-\[14px\] { font-size: 15.5px; }
+.panel-lg .text-\[15px\] { font-size: 16.5px; }
+.panel-lg .text-\[16px\] { font-size: 17.5px; }
+.panel-lg .text-\[18px\] { font-size: 20px; }
+.panel-lg .text-\[20px\] { font-size: 24px; }
