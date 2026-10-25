@@ -1,8 +1,8 @@
-# ChillPrint
+# The Chill Factor
 
 **Is this winter enough for my trees, here?**
 
-ChillPrint estimates winter chill for California fruit and nut growers at the exact spot of their orchard, not at the nearest CIMIS station. Drop a pin, pick a crop and variety, and get:
+The Chill Factor estimates winter chill for California fruit and nut growers at the exact spot of their orchard, not at the nearest CIMIS station. Drop a pin, pick a crop and variety, and get:
 
 - a green, amber or red verdict against that variety's chill need,
 - chill so far with a measured error bar,
